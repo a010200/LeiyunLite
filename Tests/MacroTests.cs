@@ -19,6 +19,7 @@ namespace RazerBatteryTray.Tests
             artifacts = directory;
             test("Macro sequence: keyboard, mouse, wheel, text, launch, command, nested loops and calls", Sequence);
             test("Macro cancellation / exception / disposal releases held input; busy start rejected", Cancellation);
+            test("1ms repeating macro has no hidden 25ms loop penalty", Timing);
             test("Macro execution budget bounds nested empty loops", Budget);
             test("Macro validation rejects recursion, missing targets, unbalanced loops and bad bindings", Validation);
             test("Binding router: once, hold, toggle, suppression, injection, disable and emergency stop", Bindings);
@@ -70,6 +71,18 @@ namespace RazerBatteryTray.Tests
             lib.Macros[0].Steps[2] = new MacroStep { Kind = ActionKind.Text, Value = "throw" }; output.Clear(); output.ThrowText = true;
             using (var engine = new MacroEngine(output)) { engine.Start(lib, "main", "test", false, 0); Until(() => !engine.IsRunning); }
             Check(output.Has("K162-") && output.Has("MLeft-"), "Exception release");
+        }
+        private static void Timing()
+        {
+            var lib = Library(new MacroStep { Kind = ActionKind.Mouse, Mouse = MouseAction.Left, Press = PressMode.Tap, Number = 1 },
+                new MacroStep { Kind = ActionKind.Delay, Number = 1 });
+            var output = new TimingOutput();
+            using (var engine = new MacroEngine(output))
+            {
+                Check(engine.Start(lib, "main", "timing", true, 0), "Timing macro did not start");
+                Until(() => output.Clicks >= 12); engine.Stop(); Until(() => !engine.IsRunning);
+            }
+            Check(output.SpanMilliseconds < 200, "Hidden repeat delay remains: " + output.SpanMilliseconds.ToString("0.0") + " ms");
         }
         private static void Budget()
         {
@@ -198,6 +211,10 @@ namespace RazerBatteryTray.Tests
                     Callback(hook, "Mouse", messages[i], new MousePacket { Data = data }); var stroke = strokes[strokes.Count - 1];
                     Check(stroke.Trigger == triggers[i / 2] && stroke.Down == (i % 2 == 0), "Mouse message " + messages[i]);
                 }
+                Callback(hook, "Mouse", 0x204, new MousePacket());
+                Callback(hook, "Mouse", 0x207, new MousePacket());
+                Check(strokes[strokes.Count - 1].Trigger == TriggerKind.Middle && strokes[strokes.Count - 1].RightButtonDown, "Right + middle chord state lost");
+                Callback(hook, "Mouse", 0x208, new MousePacket()); Callback(hook, "Mouse", 0x205, new MousePacket());
                 count = strokes.Count;
                 Check(Callback(hook, "Mouse", 0x20A, new MousePacket { Data = 60u << 16 }) == new IntPtr(1), "Fractional wheel leaked");
                 Check(strokes.Count == count, "Fractional wheel triggered early");
@@ -220,6 +237,17 @@ namespace RazerBatteryTray.Tests
             public void Wheel(int notches) { Add("W" + notches); }
             public void Text(string text, CancellationToken token) { if (ThrowText) throw new Exception("test failure"); Add("T" + text); }
             public void Launch(string target, string args, bool command) { Add((command ? "C" : "L") + target + ":" + args); }
+        }
+        private sealed class TimingOutput : IMacroOutput
+        {
+            private readonly List<long> clicks = new List<long>();
+            public int Clicks { get { lock (clicks) return clicks.Count; } }
+            public double SpanMilliseconds { get { lock (clicks) return clicks.Count < 2 ? double.MaxValue : (clicks[clicks.Count - 1] - clicks[0]) * 1000.0 / Stopwatch.Frequency; } }
+            public void Key(int key, bool down) { }
+            public void MouseButton(MouseAction button, bool down) { if (button == MouseAction.Left && down) lock (clicks) clicks.Add(Stopwatch.GetTimestamp()); }
+            public void Wheel(int notches) { }
+            public void Text(string text, CancellationToken token) { }
+            public void Launch(string target, string arguments, bool command) { }
         }
         private sealed class Runner : IMacroRunner
         {

@@ -13,13 +13,13 @@ namespace RazerBatteryTray.Desktop
         private static void VersionMetadata()
         {
             var assembly = typeof(AppVersion).Assembly;
-            Check(AppVersion.Number == "1.2.1" && ReleaseUpdateService.CurrentVersion == AppVersion.Number, "Version baseline");
+            Check(AppVersion.Number == "1.2.2" && ReleaseUpdateService.CurrentVersion == AppVersion.Number, "Version baseline");
             Check(assembly.GetName().Version.ToString() == AppVersion.AssemblyNumber, "Assembly version");
             var info = (AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(assembly, typeof(AssemblyInformationalVersionAttribute));
             var file = (AssemblyFileVersionAttribute)Attribute.GetCustomAttribute(assembly, typeof(AssemblyFileVersionAttribute));
             Check(info.InformationalVersion == AppVersion.Number && file.Version == AppVersion.AssemblyNumber, "File and product version");
             string json = "[" + OfferJson("v" + AppVersion.Number, new string('a', 64), false) + "]";
-            Check(ReleaseUpdateService.Select(json, false, "1.2.0").Tag == "v1.2.1", "1.2.0 discovers 1.2.1 upgrade");
+            Check(ReleaseUpdateService.Select(json, false, "1.2.0").Tag == "v" + AppVersion.Number, "Older version discovers current upgrade");
             Check(ReleaseUpdateService.Select(json, true, AppVersion.Number) == null, "Current version cannot offer itself");
         }
         private static void UpdateHandoffSafety()

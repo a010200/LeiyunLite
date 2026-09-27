@@ -39,8 +39,9 @@ namespace RazerBatteryTray.Desktop
         private DpiMonitor monitor;
         private readonly DispatcherTimer refreshTimer = new DispatcherTimer(), toastTimer = new DispatcherTimer();
         private int currentPage = -1;
-        private bool refreshing, exiting, disposed, discardApproved;
+        private bool refreshing, exiting, disposed, discardApproved, runtimeInitialized;
         private FrameworkElement previousFocus;
+        internal bool StartHidden { get; private set; }
         internal bool DrawerOpen { get { return overlay.Visibility == Visibility.Visible; } }
         internal event Action Refreshed;
 
@@ -53,6 +54,10 @@ namespace RazerBatteryTray.Desktop
             string executable = System.Reflection.Assembly.GetExecutingAssembly().Location;
             var installation = RazerBatteryTray.Updates.InstallLayout.Detect(executable);
             autoStart = new AutoStartService(installation == null ? executable : installation.Launcher);
+            bool registeredAtSignIn = !demo && autoStart.IsEnabled();
+            if (!demo) autoStart.Sync();
+            StartHidden = !demo && AutoStartService.ShouldStartHidden(auto, DesktopApp.UpdateHidden,
+                LegacySettings.AutoStartShowUI, registeredAtSignIn, AutoStartService.SystemUptimeMilliseconds);
             Updates = new UpdateSession(this);
             ApplyLanguage();
             Ui.ApplyTheme(Preferences.Theme);
@@ -76,16 +81,6 @@ namespace RazerBatteryTray.Desktop
             refreshTimer.Tick += async (s, e) => await RefreshDevice();
             toastTimer.Interval = TimeSpan.FromSeconds(8);
             toastTimer.Tick += (s, e) => { toast.Text = ""; toastTimer.Stop(); };
-            Loaded += async (s, e) => {
-                if (demo) { await RefreshDevice(); return; }
-                if (!await CompleteTrial()) return;
-                SetupTray();
-                monitor = new DpiMonitor(Device, reading => Dispatcher.BeginInvoke(new Action(() => OnDpi(reading))));
-                monitor.Start(); refreshTimer.Start();
-                if (DesktopApp.UpdateHidden || auto && !LegacySettings.AutoStartShowUI) Hide();
-                Updates.Start();
-                await RefreshDevice();
-            };
             SourceInitialized += (s, e) => {
                 HwndSource.FromHwnd(new WindowInteropHelper(this).Handle).AddHook((IntPtr hwnd, int msg, IntPtr w, IntPtr l, ref bool handled) => {
                     if (msg == 0x0219 && !Demo && !disposed) { Device.InvalidateTarget(); Dispatcher.BeginInvoke(new Action(async () => await RefreshDevice())); }
@@ -98,6 +93,23 @@ namespace RazerBatteryTray.Desktop
                 if (e.Key == Key.Escape && DrawerOpen) { CloseDrawer(); e.Handled = true; }
                 if (e.Key == Key.F12 && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift)) { if (Macros != null) Macros.Stop(); e.Handled = true; }
             };
+        }
+        internal async Task InitializeRuntime()
+        {
+            if (runtimeInitialized || disposed) return;
+            runtimeInitialized = true;
+            if (Demo) { await RefreshDevice(); return; }
+            if (!await CompleteTrial()) return;
+            SetupTray();
+            monitor = new DpiMonitor(Device, reading => Dispatcher.BeginInvoke(new Action(() => OnDpi(reading))));
+            monitor.Start(); refreshTimer.Start();
+            Updates.Start();
+            await RefreshDevice();
+        }
+        internal void AbortStartup()
+        {
+            exiting = true; discardApproved = true;
+            try { Close(); } catch { if (Application.Current != null) Application.Current.Shutdown(); }
         }
         private void ApplyLanguage()
         {

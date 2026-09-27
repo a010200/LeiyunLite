@@ -21,6 +21,7 @@ namespace RazerBatteryTray.Macros
         private readonly Func<InputStroke, bool> handle;
         private readonly Func<InputStroke, bool> suppressWheel;
         private readonly HashSet<int> keys = new HashSet<int>();
+        private readonly HashSet<TriggerKind> mouseButtons = new HashSet<TriggerKind>();
         private readonly ManualResetEvent ready = new ManualResetEvent(false);
         private Thread thread;
         private uint threadId;
@@ -128,7 +129,9 @@ namespace RazerBatteryTray.Macros
                                 return CallNextHookEx(IntPtr.Zero, code, message, data);
                             default: return CallNextHookEx(IntPtr.Zero, code, message, data);
                         }
-                        if (handle(new InputStroke { Trigger = kind, Down = down, Modifiers = Modifiers })) return new IntPtr(1);
+                        if (down) mouseButtons.Add(kind); else mouseButtons.Remove(kind);
+                        if (handle(new InputStroke { Trigger = kind, Down = down, Modifiers = Modifiers,
+                            RightButtonDown = mouseButtons.Contains(TriggerKind.Right) })) return new IntPtr(1);
                     }
                 }
             }

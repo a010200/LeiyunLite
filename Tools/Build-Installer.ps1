@@ -18,9 +18,9 @@ try {
  $OutputDirectory=(Resolve-Path -LiteralPath $OutputDirectory).Path
  $stage=Join-Path $OutputDirectory 'installer-source';$payload=Join-Path $stage 'payload'
  [void](New-Item -ItemType Directory -Path $payload)
- & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
+ $build=Join-Path $OutputDirectory 'desktop-build'
+ & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1 -OutputDirectory $build
  if($LASTEXITCODE -ne 0){throw 'App build failed'}
- $build=Join-Path $root ('bin\Desktop'+$version)
  $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
  $common=@('/nologo','/optimize+','/platform:x64','/codepage:65001','/r:System.Windows.Forms.dll','/r:System.Security.dll','/r:System.Web.Extensions.dll','/r:System.IO.Compression.dll','/r:System.IO.Compression.FileSystem.dll')
  $sources=@(Get-ChildItem -LiteralPath 'Updates' -Filter '*.cs'|ForEach-Object FullName)

@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Xml;
 
@@ -51,7 +52,24 @@ namespace RazerBatteryTray.Desktop
                     var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
                     LoadTheme(app);
                     var window = new ShellWindow(demo, Array.IndexOf(args, "--autostart") >= 0);
-                    app.Run(window);
+                    app.MainWindow = window;
+                    app.Startup += async (s, e) => {
+                        try
+                        {
+                            // Create the message-only owner HWND without revealing the main
+                            // window. Device notifications and the tray icon can then start
+                            // normally during a silent sign-in launch.
+                            new WindowInteropHelper(window).EnsureHandle();
+                            if (!window.StartHidden) window.Show();
+                            await window.InitializeRuntime();
+                        }
+                        catch (Exception ex)
+                        {
+                            if (TrialToken == null) MessageBox.Show(ex.ToString(), "雷云lite — 启动失败 / Startup failed");
+                            window.AbortStartup();
+                        }
+                    };
+                    app.Run();
                 }
                 catch (Exception ex) { if (TrialToken == null) MessageBox.Show(ex.ToString(), "雷云lite — 启动失败 / Startup failed"); }
                 finally { mutex.ReleaseMutex(); }

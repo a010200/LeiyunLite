@@ -255,6 +255,11 @@ namespace RazerBatteryTray.Tests
                 auto.Sync();
                 using (var key = Registry.CurrentUser.OpenSubKey(root + @"\Run"))
                     Check(((string)key.GetValue("RazerBatteryTray")).Contains("--autostart"), "Run command migration");
+                Check(AutoStartService.ShouldStartHidden(true, false, false, true, 999999), "Explicit auto-start should be hidden");
+                Check(AutoStartService.ShouldStartHidden(false, true, true, false, 999999), "Update handoff should be hidden");
+                Check(AutoStartService.ShouldStartHidden(false, false, false, true, 120000), "Legacy boot registration should be inferred");
+                Check(!AutoStartService.ShouldStartHidden(false, false, false, true, 999999), "Late manual launch was mistaken for sign-in");
+                Check(!AutoStartService.ShouldStartHidden(true, false, true, true, 120000), "Show-at-sign-in preference ignored");
                 auto.SetEnabled(false); Check(!auto.IsEnabled(), "Auto-start disable");
             }
             finally { Registry.CurrentUser.DeleteSubKeyTree(root, false); }

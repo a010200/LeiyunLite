@@ -20,10 +20,13 @@ namespace RazerBatteryTray.Macros
         [StructLayout(LayoutKind.Sequential)] internal struct KeyboardInput
         { public ushort Key, Scan; public uint Flags, Time; public UIntPtr Extra; }
         [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
-        private static void Send(params Input[] inputs)
+        private long totalInputsSent;
+        internal long TotalInputsSent { get { return Interlocked.Read(ref totalInputsSent); } }
+        private void Send(params Input[] inputs)
         {
             if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) != inputs.Length)
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows 未接受模拟输入；请检查目标窗口权限。");
+            Interlocked.Add(ref totalInputsSent, inputs.Length);
         }
         public void Key(int key, bool down)
         {

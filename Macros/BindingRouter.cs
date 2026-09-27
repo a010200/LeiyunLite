@@ -12,6 +12,7 @@ namespace RazerBatteryTray.Macros
         public long Timestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         public bool Injected { get; set; }
         public bool BypassBindings { get; set; }
+        public bool RightButtonDown { get; set; }
         internal bool RecordingAreaAllowed, SkipRecording, BreakRecordingTiming;
         public string Physical { get { return Trigger + ":" + (Trigger == TriggerKind.Keyboard ? Key : 0); } }
     }

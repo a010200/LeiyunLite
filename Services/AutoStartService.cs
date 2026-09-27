@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace RazerBatteryTray
@@ -15,6 +16,7 @@ namespace RazerBatteryTray
         private const string AppName = "RazerBatteryTray";
         private readonly string executablePath;
         private readonly string runKey;
+        [DllImport("kernel32.dll")] private static extern ulong GetTickCount64();
         internal AutoStartService(string executablePath,
             string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run")
         {
@@ -31,6 +33,19 @@ namespace RazerBatteryTray
             catch { return false; }
         }
         private string Command { get { return "\"" + executablePath + "\" --autostart"; } }
+        internal static ulong SystemUptimeMilliseconds
+        {
+            get { try { return GetTickCount64(); } catch { return ulong.MaxValue; } }
+        }
+        internal static bool ShouldStartHidden(bool explicitAutoStart, bool updateHidden, bool showAtSignIn,
+            bool registeredAtSignIn, ulong uptimeMilliseconds)
+        {
+            if (updateHidden) return true;
+            if (showAtSignIn) return false;
+            // Older registrations did not always carry --autostart. During the first
+            // minutes after boot, a registered launch is therefore treated as silent.
+            return explicitAutoStart || registeredAtSignIn && uptimeMilliseconds < 360000;
+        }
         internal bool IsCurrentExecutableEnabled()
         {
             try { using (var key = Registry.CurrentUser.OpenSubKey(runKey, false))

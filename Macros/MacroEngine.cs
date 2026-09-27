@@ -1,10 +1,71 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace RazerBatteryTray.Macros
 {
+    internal sealed class PrecisionScheduler : IDisposable
+    {
+        private const uint CreateHighResolution = 0x00000002;
+        private const uint Synchronize = 0x00100000, TimerQueryState = 0x0001, TimerModifyState = 0x0002;
+        private const uint WaitObject0 = 0, Infinite = 0xFFFFFFFF;
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateWaitableTimerEx(IntPtr attributes, string name, uint flags, uint access);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetWaitableTimer(IntPtr timer, ref long dueTime, int period, IntPtr completion, IntPtr argument, bool resume);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint WaitForMultipleObjects(uint count, IntPtr[] handles, bool waitAll, uint milliseconds);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+
+        private readonly CancellationToken token;
+        private IntPtr timer;
+        private long deadline;
+        internal int DelayCount { get; private set; }
+        internal bool HighResolutionAvailable { get { return timer != IntPtr.Zero; } }
+
+        internal PrecisionScheduler(CancellationToken token)
+        {
+            this.token = token; deadline = Stopwatch.GetTimestamp();
+            uint access = Synchronize | TimerQueryState | TimerModifyState;
+            timer = CreateWaitableTimerEx(IntPtr.Zero, null, CreateHighResolution, access);
+            if (timer == IntPtr.Zero) timer = CreateWaitableTimerEx(IntPtr.Zero, null, 0, access);
+        }
+        internal void Wait(int milliseconds)
+        {
+            token.ThrowIfCancellationRequested();
+            if (milliseconds <= 0) return;
+            DelayCount++;
+            long now = Stopwatch.GetTimestamp();
+            // Do not replay a backlog after sleep/resume or a long blocking action.
+            if (deadline < now - Stopwatch.Frequency) deadline = now;
+            long delta = Math.Max(1, (long)Math.Round(milliseconds * (double)Stopwatch.Frequency / 1000.0));
+            deadline += delta;
+            while (true)
+            {
+                token.ThrowIfCancellationRequested(); now = Stopwatch.GetTimestamp();
+                long remaining = deadline - now; if (remaining <= 0) return;
+                if (timer != IntPtr.Zero)
+                {
+                    long dueTime = -Math.Max(1, (long)Math.Ceiling(remaining * 10000000.0 / Stopwatch.Frequency));
+                    if (SetWaitableTimer(timer, ref dueTime, 0, IntPtr.Zero, IntPtr.Zero, false))
+                    {
+                        IntPtr cancel = token.WaitHandle.SafeWaitHandle.DangerousGetHandle();
+                        uint result = WaitForMultipleObjects(2, new[] { timer, cancel }, false, Infinite);
+                        if (result == WaitObject0 + 1) token.ThrowIfCancellationRequested();
+                        if (result == WaitObject0) continue;
+                    }
+                    CloseHandle(timer); timer = IntPtr.Zero;
+                }
+                int fallback = Math.Max(1, (int)Math.Min(int.MaxValue, Math.Ceiling(remaining * 1000.0 / Stopwatch.Frequency)));
+                if (token.WaitHandle.WaitOne(fallback)) token.ThrowIfCancellationRequested();
+            }
+        }
+        public void Dispose() { if (timer != IntPtr.Zero) { CloseHandle(timer); timer = IntPtr.Zero; } }
+    }
+
     internal interface IMacroOutput
     {
         void Key(int key, bool down);
@@ -59,15 +120,21 @@ namespace RazerBatteryTray.Macros
             try
             {
                 Report("执行中：" + macro.Name + " · Ctrl+Shift+F12 停止");
-                Wait(initialDelay, source.Token);
-                do
+                using (var scheduler = new PrecisionScheduler(source.Token))
                 {
-                    int budget = 100000;
-                    Execute(library, macro.Steps, 0, macro.Steps.Count, source.Token, heldKeys, heldButtons, ref budget);
-                    string releaseError = Release(heldKeys, heldButtons);
-                    if (releaseError != null) throw new InvalidOperationException(releaseError);
-                    if (repeat) Wait(25, source.Token);
-                } while (repeat);
+                    scheduler.Wait(initialDelay);
+                    do
+                    {
+                        int delaysBefore = scheduler.DelayCount;
+                        int budget = 100000;
+                        Execute(library, macro.Steps, 0, macro.Steps.Count, source.Token, heldKeys, heldButtons, scheduler, ref budget);
+                        string releaseError = Release(heldKeys, heldButtons);
+                        if (releaseError != null) throw new InvalidOperationException(releaseError);
+                        // A zero-delay repeating macro still yields for safety. Macros
+                        // containing an explicit delay receive no hidden loop penalty.
+                        if (repeat && scheduler.DelayCount == delaysBefore) scheduler.Wait(1);
+                    } while (repeat);
+                }
             }
             catch (OperationCanceledException) { status = "已停止：" + macro.Name; }
             catch (Exception ex) { status = "宏执行失败：" + ex.Message; }
@@ -96,12 +163,8 @@ namespace RazerBatteryTray.Macros
             }
             return error;
         }
-        private static void Wait(int milliseconds, CancellationToken token)
-        {
-            if (token.WaitHandle.WaitOne(milliseconds)) token.ThrowIfCancellationRequested();
-        }
         private void Execute(MacroLibrary library, List<MacroStep> steps, int start, int end, CancellationToken token,
-            HashSet<int> keys, HashSet<MouseAction> buttons, ref int budget)
+            HashSet<int> keys, HashSet<MouseAction> buttons, PrecisionScheduler scheduler, ref int budget)
         {
             for (int i = start; i < end; i++)
             {
@@ -110,7 +173,7 @@ namespace RazerBatteryTray.Macros
                 var step = steps[i];
                 switch (step.Kind)
                 {
-                    case ActionKind.Delay: Wait(step.Number, token); break;
+                    case ActionKind.Delay: scheduler.Wait(step.Number); break;
                     case ActionKind.Keyboard:
                         if (step.Press != PressMode.Up) { output.Key(step.KeyCode, true); keys.Add(step.KeyCode); }
                         if (step.Press != PressMode.Down) { output.Key(step.KeyCode, false); keys.Remove(step.KeyCode); }
@@ -129,7 +192,7 @@ namespace RazerBatteryTray.Macros
                     case ActionKind.Command: output.Launch(step.Value, step.Arguments, true); break;
                     case ActionKind.CallMacro:
                         var child = library.Find(step.Value);
-                        Execute(library, child.Steps, 0, child.Steps.Count, token, keys, buttons, ref budget);
+                        Execute(library, child.Steps, 0, child.Steps.Count, token, keys, buttons, scheduler, ref budget);
                         break;
                     case ActionKind.LoopStart:
                         int depth = 1, close = i + 1;
@@ -143,7 +206,7 @@ namespace RazerBatteryTray.Macros
                         {
                             token.ThrowIfCancellationRequested();
                             if (--budget < 0) throw new InvalidOperationException("循环超过单次执行上限。");
-                            Execute(library, steps, i + 1, close, token, keys, buttons, ref budget);
+                            Execute(library, steps, i + 1, close, token, keys, buttons, scheduler, ref budget);
                         }
                         i = close;
                         break;

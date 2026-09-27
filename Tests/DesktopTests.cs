@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using RazerBatteryTray.Macros;
 
@@ -17,11 +19,12 @@ namespace RazerBatteryTray.Desktop
         private static int passed, failed;
         private static readonly List<string> results = new List<string>();
         private static string artifacts;
+        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
         [STAThread]
         private static int Main()
         {
             artifacts = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "artifacts"); Directory.CreateDirectory(artifacts);
-            Test("v1.2.1 assembly, display and update version consistency", VersionMetadata);
+            Test("v1.2.2 assembly, display and update version consistency", VersionMetadata);
             Test("Update handoff blocks draft, recording, running macros and failed safety saves", UpdateHandoffSafety);
             Test("Explicit capabilities: SE includes 500, no speculative 8k or unknown writes", Capabilities);
             Test("Verified DPI preserves all other stages (90 and 91 byte reports)", Dpi);
@@ -47,10 +50,16 @@ namespace RazerBatteryTray.Desktop
             Test("R5 instance cache isolation and stale write target rejection", InstanceSafety);
             Test("R5 area recording filters, pause balancing and live snapshots", AreaRecording);
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            Test("Silent startup creates its message HWND without showing the main window", () => {
+                DesktopApp.LoadTheme(app); var hidden = new ShellWindow(true);
+                IntPtr handle = new WindowInteropHelper(hidden).EnsureHandle();
+                Check(handle != IntPtr.Zero && !hidden.IsVisible && !IsWindowVisible(handle), "Hidden startup revealed its main HWND");
+                hidden.ClosePreview();
+            });
             Test("WPF theme loads, all pages render and rapid navigation stops hidden animations", () => {
-                DesktopApp.LoadTheme(app); Ui.ReducedMotion = true;
+                Ui.ReducedMotion = true;
                 var window = new ShellWindow(true); window.Preferences.Language = "zh"; window.Preferences.ReducedMotion = true; window.RebuildPages(0);
-                window.ShowActivated = false; window.ShowInTaskbar = false; window.Show(); Pump();
+                window.ShowActivated = false; window.ShowInTaskbar = false; window.Show(); window.InitializeRuntime().GetAwaiter().GetResult(); Pump();
                 Check(window.Title == AppVersion.DisplayName, "Window title uses current version");
                 try
                 {

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace RazerBatteryTray.Macros
 {
@@ -11,6 +12,7 @@ namespace RazerBatteryTray.Macros
         internal bool SafetySavePending { get; private set; }
         private readonly MacroEngine engine;
         private readonly BindingRouter router;
+        private readonly WindowsMacroOutput windowsOutput;
         private GlobalInputHook hooks;
         private MacroLibrary library;
         private volatile MacroRecorder recorder;
@@ -36,17 +38,22 @@ namespace RazerBatteryTray.Macros
         [DllImport("user32.dll")] private static extern bool GetCursorPos(out System.Drawing.Point point);
         [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(System.Drawing.Point point);
         public string Status { get; private set; }
+        public string InputDiagnostic { get; private set; }
         public string ConfigPath { get { return store.FilePath; } }
         public bool IsRunning { get { return engine.IsRunning; } }
         public event Action<string> StatusChanged;
+        public event Action<string> InputDiagnosticChanged;
+        private int diagnosticSequence;
         public MacroController(IMacroStore store, IMacroOutput output, bool installHooks, bool initiallySuspended = false)
         {
             this.store = store;
             library = store.Load();
             engine = new MacroEngine(output);
+            windowsOutput = output as WindowsMacroOutput;
             router = new BindingRouter(engine); router.Configure(library);
             manuallyPaused = initiallySuspended; router.Suspended = initiallySuspended;
             Status = "就绪 · Ctrl+Shift+F12 停止所有宏";
+            InputDiagnostic = "输入诊断：按住右键再按中键，可确认触发和模拟输入是否已到达 Windows。";
             engine.StatusChanged += message => {
                 Status = message;
                 var handler = StatusChanged; if (handler != null) handler(message);
@@ -83,7 +90,36 @@ namespace RazerBatteryTray.Macros
                 active.Capture(stroke);
             }
             if (recordingSession && stroke.Down && stroke.Trigger == TriggerKind.Keyboard && stroke.Key == 123 && (stroke.Modifiers & (KeyModifiers.Control | KeyModifiers.Shift)) == (KeyModifiers.Control | KeyModifiers.Shift)) recordingStopRequested = true;
-            return router.Handle(stroke);
+            bool chord = stroke.Down && stroke.Trigger == TriggerKind.Middle && stroke.RightButtonDown;
+            string activeBefore = chord ? engine.ActiveBinding : null;
+            long sentBefore = chord && windowsOutput != null ? windowsOutput.TotalInputsSent : 0;
+            bool suppress = router.Handle(stroke);
+            if (chord)
+            {
+                string activeAfter = engine.ActiveBinding;
+                bool started = activeAfter != null && activeAfter != activeBefore;
+                int sequence = Interlocked.Increment(ref diagnosticSequence);
+                SetInputDiagnostic(started
+                    ? "右键＋中键：已收到物理触发，宏已启动，正在检查 Windows 输出。"
+                    : activeAfter != null ? "右键＋中键：已收到物理触发，但已有宏正在运行，新宏未启动。"
+                    : "右键＋中键：已收到物理触发，但没有启动宏；请检查绑定是否启用。"
+                );
+                ThreadPool.QueueUserWorkItem(_ => {
+                    Thread.Sleep(80);
+                    if (sequence != Volatile.Read(ref diagnosticSequence)) return;
+                    long sent = windowsOutput == null ? -1 : windowsOutput.TotalInputsSent - sentBefore;
+                    if (started && sent > 0)
+                        SetInputDiagnostic("右键＋中键：触发已收到，宏已启动，80ms 内已向 Windows 提交 " + sent + " 个输入。若游戏仍无反应，属于目标程序输入兼容问题。");
+                    else if (started)
+                        SetInputDiagnostic("右键＋中键：宏已启动，但 80ms 内没有成功提交输入；请检查宏内容或目标窗口权限。");
+                });
+            }
+            return suppress;
+        }
+        private void SetInputDiagnostic(string message)
+        {
+            InputDiagnostic = message;
+            var handler = InputDiagnosticChanged; if (handler != null) { try { handler(message); } catch { } }
         }
         private bool SuppressWheel(InputStroke stroke) { ProtectOwnWindow(stroke); return router.SuppressWheel(stroke); }
         internal static bool AllowsAreaStroke(InputStroke stroke, System.Drawing.Rectangle bounds, bool focused, System.Drawing.Point? point)

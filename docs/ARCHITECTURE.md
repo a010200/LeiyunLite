@@ -1,10 +1,12 @@
 # 模块划分与修改入口
 
-## 当前 WPF 界面（v1.2.1）
+## 当前 WPF 界面（v1.2.2）
 
 当前入口为 `Desktop/DesktopApp.cs`，输出 `LeiyunLite.Desktop.exe`，使用 WPF / .NET Framework 4.8。`ShellWindow` 组织导航与页面，`DevicePage` 负责设备界面，`MacroPage` 的 partial 文件负责宏编辑、绑定和录制，`TrayController` 管理托盘弹层。共享主题与动效位于 `Ui.cs`、`Fluent.xaml`、`ElasticSwitch.cs`、`ElasticDropdown.cs`。
 
-设备页通过 `VerifiedDeviceCommands` 和 `DeviceCapabilities` 限定 PID 能力并核对写入读回；底层仍复用 `Devices/` 与 `Services/`。宏通过 `MacroController` 连接钩子、绑定路由、录制器、播放引擎与 XML 存储。新增 `MacroRecorder` 只在显式录制会话中将有界输入队列转换为草稿。
+设备页通过 `VerifiedDeviceCommands` 和 `DeviceCapabilities` 限定 PID 能力并核对写入读回；底层仍复用 `Devices/` 与 `Services/`。宏通过 `MacroController` 连接钩子、绑定路由、录制器、播放引擎与 XML 存储。`MacroEngine` 使用高分辨率等待计时器和绝对截止时间执行短延迟；`MacroRecorder` 只在显式录制会话中将有界输入队列转换为草稿。
+
+自启动由 `DesktopApp` 先建立不可见的主窗口 HWND，再初始化托盘和服务；只有普通启动或“开机时显示主窗口”开启时才调用 `Show()`。`AutoStartService` 会迁移旧 HKCU Run 命令，避免旧参数导致登录时误显示主窗口。
 
 `UI/` 下的 WinForms 窗口与 DPI OSD 保留用于旧版回归，不是当前 WPF 界面。旋转通过 `VerifiedDeviceCommands` 对已验收的 SE 随附接收器执行读取、写入、读回和失败恢复；范围见[旋转验证](ROTATION-VALIDATION.md)。`ReleaseUpdateService` 使用项目 GitHub 发布源；`Updates/` 与 `Installer/` 实现签名更新和隔离安装，见[安装与更新](INSTALLING.md)。下面是最初拆分阶段的历史记录，不应作为当前界面或能力说明；当前功能以根 README 为准。
 

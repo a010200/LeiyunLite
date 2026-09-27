@@ -20,6 +20,9 @@ namespace RazerBatteryTray.Desktop
         private Grid libraryTools;
         private StackPanel runTools;
         private TextBlock emptyHint;
+        private TextBlock inputDiagnostic;
+        private Action<string> inputDiagnosticHandler;
+        private bool diagnosticsSubscribed;
         private ActionKind addingKind;
         private Point dragStart;
         private int dragIndex = -1;
@@ -65,7 +68,9 @@ namespace RazerBatteryTray.Desktop
             libraryTools.Children.Add(library); libraryTools.Children.Add(newButton); libraryTools.Children.Add(more);
             var toolbar = new Grid { Margin = new Thickness(0, 0, 0, 16) }; toolbar.ColumnDefinitions.Add(new ColumnDefinition()); toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             libraryTools.Margin = new Thickness(0, 0, 24, 0); toolbar.Children.Add(libraryTools); Grid.SetColumn(runTools, 1); toolbar.Children.Add(runTools);
-            var toolsAndStatus = Ui.Stack(toolbar, BuildRecordingStatus()); Grid.SetRow(toolsAndStatus, 1); root.Children.Add(toolsAndStatus);
+            inputDiagnostic = Ui.Text(shell.Macros == null ? Ui.T("安全预览不监听输入。", "Safe preview does not monitor input.") : shell.Macros.InputDiagnostic, 12, Ui.Muted);
+            inputDiagnostic.TextWrapping = TextWrapping.Wrap; inputDiagnostic.Margin = new Thickness(0, 0, 0, 10);
+            var toolsAndStatus = Ui.Stack(toolbar, inputDiagnostic, BuildRecordingStatus()); Grid.SetRow(toolsAndStatus, 1); root.Children.Add(toolsAndStatus);
             workspace = new Grid(); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) }); workspace.ColumnDefinitions.Add(new ColumnDefinition()); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) }); Grid.SetRow(workspace, 2); root.Children.Add(workspace);
             var palette = Ui.Stack(Ui.Text(Ui.T("添加动作", "Add action"), 15));
             for (int i = 0; i < 8; i++) { var kind = (ActionKind)i; var b = Ui.Button("+  " + Actions[i], () => { if (Selected == null) { shell.Notice(Ui.T("请先新建一个宏。", "Create a macro first.")); return; } addingKind = kind; EditStep(false); }); b.Padding = new Thickness(10, 11, 8, 11); b.HorizontalContentAlignment = HorizontalAlignment.Left; b.Background = Brushes.Transparent; b.BorderThickness = new Thickness(0); palette.Children.Add(b); }
@@ -88,7 +93,14 @@ namespace RazerBatteryTray.Desktop
             steps.PreviewMouseMove += (s, e) => { if (dragIndex < 0 || e.LeftButton != MouseButtonState.Pressed) return; var point = e.GetPosition(steps); if (Math.Abs(point.X - dragStart.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(point.Y - dragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return; int source = dragIndex; dragIndex = -1; DragDrop.DoDragDrop(steps, new DataObject("LeiyunStep", source), DragDropEffects.Move); };
             steps.Drop += (s, e) => { if (!e.Data.GetDataPresent("LeiyunStep")) return; var row = ItemsControl.ContainerFromElement(steps, e.OriginalSource as DependencyObject) as ListBoxItem; int to = row == null ? steps.Items.Count : steps.Items.IndexOf(row); Reorder((int)e.Data.GetData("LeiyunStep"), to); e.Handled = true; };
             SizeChanged += (s, e) => UpdatePropertyLayout();
-            Content = root; ReloadLibrary(null); SelectTab(false); InitializeRecording();
+            Content = root; ReloadLibrary(null); SelectTab(false); InitializeRecording(); InitializeInputDiagnostics();
+        }
+        private void InitializeInputDiagnostics()
+        {
+            if (shell.Macros == null) return;
+            inputDiagnosticHandler = message => Dispatcher.BeginInvoke(new Action(() => inputDiagnostic.Text = message));
+            Loaded += (s, e) => { if (!diagnosticsSubscribed) { shell.Macros.InputDiagnosticChanged += inputDiagnosticHandler; diagnosticsSubscribed = true; inputDiagnostic.Text = shell.Macros.InputDiagnostic; } };
+            Unloaded += (s, e) => { if (diagnosticsSubscribed) { shell.Macros.InputDiagnosticChanged -= inputDiagnosticHandler; diagnosticsSubscribed = false; } };
         }
         private void SelectTab(bool binding)
         {
