@@ -1,0 +1,8 @@
+{
+  "folders": [{ "name": "Leiyun Lite", "path": "." }],
+  "settings": {
+    "dotnet.preferCSharpExtension": true,
+    "dotnet.server.useOmnisharp": true,
+    "omnisharp.useModernNet": false
+  }
+}
