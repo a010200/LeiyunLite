@@ -40,12 +40,34 @@ namespace RazerBatteryTray.Macros
         {
             lock (gate) { if (engine.IsRunning) return false; Suspended = true; return true; }
         }
+        private static bool Matches(MacroBinding binding, InputStroke stroke)
+        {
+            if (!binding.Enabled || binding.Trigger != stroke.Trigger) return false;
+            if (binding.Trigger == TriggerKind.Keyboard)
+                return binding.KeyCode == stroke.Key && binding.Modifiers == stroke.Modifiers;
+            // A mouse button remains its own trigger while unrelated keyboard
+            // modifiers are held. Explicit combinations require their modifiers.
+            return (stroke.Modifiers & binding.Modifiers) == binding.Modifiers;
+        }
+        private MacroBinding FindMatch(InputStroke stroke)
+        {
+            MacroBinding best = null; int bestSpecificity = -1;
+            foreach (var binding in library.Bindings)
+            {
+                if (!Matches(binding, stroke)) continue;
+                int value = (int)binding.Modifiers, specificity = 0;
+                while (value != 0) { specificity += value & 1; value >>= 1; }
+                if (specificity > bestSpecificity) { best = binding; bestSpecificity = specificity; }
+            }
+            return best;
+        }
         public bool SuppressWheel(InputStroke stroke)
         {
             lock (gate)
             {
-                return !stroke.BypassBindings && !Suspended && library.BindingsEnabled && library.Bindings.Exists(b =>
-                    b.Enabled && b.SuppressOriginal && b.Trigger == stroke.Trigger && b.Modifiers == stroke.Modifiers);
+                if (stroke.BypassBindings || Suspended || !library.BindingsEnabled) return false;
+                var match = FindMatch(stroke);
+                return match != null && match.SuppressOriginal;
             }
         }
         public bool Handle(InputStroke stroke)
@@ -57,11 +79,11 @@ namespace RazerBatteryTray.Macros
                 if (!stroke.Down)
                 {
                     pressed.Remove(physical);
-                    string binding;
-                    if (held.TryGetValue(physical, out binding))
+                    string heldBinding;
+                    if (held.TryGetValue(physical, out heldBinding))
                     {
                         held.Remove(physical);
-                        if (engine.ActiveBinding == binding) engine.Stop();
+                        if (engine.ActiveBinding == heldBinding) engine.Stop();
                     }
                     return suppressed.Remove(physical);
                 }
@@ -74,10 +96,9 @@ namespace RazerBatteryTray.Macros
                 }
                 if (repeated) return suppressed.Contains(physical);
                 if (stroke.BypassBindings || Suspended || !library.BindingsEnabled) return false;
-                foreach (var binding in library.Bindings)
+                var binding = FindMatch(stroke);
+                if (binding != null)
                 {
-                    if (!binding.Enabled || binding.Trigger != stroke.Trigger || binding.Modifiers != stroke.Modifiers ||
-                        (binding.Trigger == TriggerKind.Keyboard && binding.KeyCode != stroke.Key)) continue;
                     if (binding.Mode == RunMode.Toggle && engine.ActiveBinding == binding.Id) engine.Stop();
                     else
                     {

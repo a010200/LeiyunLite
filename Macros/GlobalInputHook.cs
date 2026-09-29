@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -20,6 +21,7 @@ namespace RazerBatteryTray.Macros
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)] private static extern IntPtr GetModuleHandle(string name);
         private readonly Func<InputStroke, bool> handle;
         private readonly Func<InputStroke, bool> suppressWheel;
+        private readonly Func<UIntPtr, bool> suppressStoppedDown;
         private readonly HashSet<int> keys = new HashSet<int>();
         private readonly HashSet<TriggerKind> mouseButtons = new HashSet<TriggerKind>();
         private readonly ManualResetEvent ready = new ManualResetEvent(false);
@@ -30,9 +32,16 @@ namespace RazerBatteryTray.Macros
         private Exception error;
         private int wheelRemainder;
         private KeyModifiers wheelModifiers;
+        private long passedLeftDowns, passedLeftUps, blockedStoppedDowns, lastPassedLeftDown, lastPassedLeftUp;
         private bool disposed;
-        public GlobalInputHook(Func<InputStroke, bool> handle, Func<InputStroke, bool> suppressWheel = null)
-        { this.handle = handle; this.suppressWheel = suppressWheel; }
+        internal long PassedLeftDowns { get { return Interlocked.Read(ref passedLeftDowns); } }
+        internal long PassedLeftUps { get { return Interlocked.Read(ref passedLeftUps); } }
+        internal long BlockedStoppedDowns { get { return Interlocked.Read(ref blockedStoppedDowns); } }
+        internal long LastPassedLeftDown { get { return Interlocked.Read(ref lastPassedLeftDown); } }
+        internal long LastPassedLeftUp { get { return Interlocked.Read(ref lastPassedLeftUp); } }
+        public GlobalInputHook(Func<InputStroke, bool> handle, Func<InputStroke, bool> suppressWheel = null,
+            Func<UIntPtr, bool> suppressStoppedDown = null)
+        { this.handle = handle; this.suppressWheel = suppressWheel; this.suppressStoppedDown = suppressStoppedDown; }
         public void Start()
         {
             if (thread != null) return;
@@ -84,9 +93,12 @@ namespace RazerBatteryTray.Macros
                 if (code >= 0)
                 {
                     var info = (KeyboardData)Marshal.PtrToStructure(data, typeof(KeyboardData));
-                    if ((info.Flags & 0x10) == 0 && info.Extra != WindowsMacroOutput.InputTag)
+                    int msg = message.ToInt32();
+                    // Drop only stale presses. Releases must still reach the target.
+                    if ((info.Flags & 0x10) != 0 && (msg == 0x100 || msg == 0x104) &&
+                        suppressStoppedDown != null && suppressStoppedDown(info.Extra)) return new IntPtr(1);
+                    if ((info.Flags & 0x10) == 0 && !WindowsMacroOutput.IsOwnInputTag(info.Extra))
                     {
-                        int msg = message.ToInt32();
                         bool down = msg == 0x100 || msg == 0x104;
                         if (down) keys.Add((int)info.Key); else keys.Remove((int)info.Key);
                         if (handle(new InputStroke { Trigger = TriggerKind.Keyboard, Key = (int)info.Key, Down = down, Modifiers = Modifiers })) return new IntPtr(1);
@@ -105,7 +117,25 @@ namespace RazerBatteryTray.Macros
                     int msg = message.ToInt32();
                     if (msg == 0x200) return CallNextHookEx(IntPtr.Zero, code, message, data);
                     var info = (MouseData)Marshal.PtrToStructure(data, typeof(MouseData));
-                    if ((info.Flags & 1) == 0 && info.Extra != WindowsMacroOutput.InputTag)
+                    // This runs before a queued injected event reaches the target.
+                    bool ownInjected = (info.Flags & 1) != 0 && WindowsMacroOutput.IsOwnInputTag(info.Extra);
+                    if (ownInjected && (msg == 0x201 || msg == 0x204 || msg == 0x207 || msg == 0x20B) &&
+                        suppressStoppedDown != null && suppressStoppedDown(info.Extra))
+                    {
+                        if (msg == 0x201) Interlocked.Increment(ref blockedStoppedDowns);
+                        return new IntPtr(1);
+                    }
+                    if (ownInjected && msg == 0x201)
+                    {
+                        Interlocked.Increment(ref passedLeftDowns);
+                        Interlocked.Exchange(ref lastPassedLeftDown, Stopwatch.GetTimestamp());
+                    }
+                    if (ownInjected && msg == 0x202)
+                    {
+                        Interlocked.Increment(ref passedLeftUps);
+                        Interlocked.Exchange(ref lastPassedLeftUp, Stopwatch.GetTimestamp());
+                    }
+                    if ((info.Flags & 1) == 0 && !WindowsMacroOutput.IsOwnInputTag(info.Extra))
                     {
                         TriggerKind kind; bool down;
                         switch (msg)

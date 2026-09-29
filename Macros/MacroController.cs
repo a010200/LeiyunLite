@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -13,6 +14,10 @@ namespace RazerBatteryTray.Macros
         private readonly MacroEngine engine;
         private readonly BindingRouter router;
         private readonly WindowsMacroOutput windowsOutput;
+        private readonly object timingGate = new object();
+        private readonly Queue<string> timingLines = new Queue<string>();
+        private long timingOrigin;
+        private int timingSequence;
         private GlobalInputHook hooks;
         private MacroLibrary library;
         private volatile MacroRecorder recorder;
@@ -56,15 +61,57 @@ namespace RazerBatteryTray.Macros
             InputDiagnostic = "输入诊断：按住右键再按中键，可确认触发和模拟输入是否已到达 Windows。";
             engine.StatusChanged += message => {
                 Status = message;
+                if (message.StartsWith("执行中：", StringComparison.Ordinal)) RecordTiming("宏状态：运行");
+                else if (message.StartsWith("已停止：", StringComparison.Ordinal)) RecordTiming("宏状态：停止");
                 var handler = StatusChanged; if (handler != null) handler(message);
             };
             if (installHooks)
             {
-                hooks = new GlobalInputHook(RouteInput, SuppressWheel);
+                hooks = new GlobalInputHook(RouteInput, SuppressWheel,
+                    windowsOutput == null ? null : new Func<UIntPtr, bool>(windowsOutput.ShouldSuppressStoppedDown));
                 try { hooks.Start(); } catch { hooks.Dispose(); engine.Dispose(); throw; }
             }
         }
         public MacroLibrary Snapshot() { lock (configurationGate) return library.Clone(); }
+        private void RecordTiming(string description)
+        {
+            long now = Stopwatch.GetTimestamp();
+            lock (timingGate)
+            {
+                if (timingOrigin == 0) timingOrigin = now;
+                double elapsed = (now - timingOrigin) * 1000.0 / Stopwatch.Frequency;
+                timingLines.Enqueue("+" + elapsed.ToString("0.0") + "ms " + description);
+                while (timingLines.Count > 160) timingLines.Dequeue();
+            }
+        }
+        internal string CopyInputTiming()
+        {
+            lock (timingGate)
+                return "雷云lite 输入时序（仅右键/中键、宏状态和模拟左键计数；仅内存保存）\r\n" +
+                    (timingLines.Count == 0 ? "尚无相关输入。" : string.Join("\r\n", timingLines.ToArray()));
+        }
+        private void RecordReleaseSummary(long releaseAt, long downsSentAtRelease, long downsPassedAtRelease,
+            long upsSentAtRelease, long upsPassedAtRelease, long blockedAtRelease, int sequence)
+        {
+            ThreadPool.QueueUserWorkItem(_ => {
+                Thread.Sleep(1200);
+                if (sequence != Volatile.Read(ref timingSequence)) return;
+                long sent = windowsOutput == null ? 0 : windowsOutput.LeftDownsSent - downsSentAtRelease;
+                long passed = hooks == null ? 0 : hooks.PassedLeftDowns - downsPassedAtRelease;
+                long upsSent = windowsOutput == null ? 0 : windowsOutput.LeftUpsSent - upsSentAtRelease;
+                long upsPassed = hooks == null ? 0 : hooks.PassedLeftUps - upsPassedAtRelease;
+                long blocked = hooks == null ? 0 : hooks.BlockedStoppedDowns - blockedAtRelease;
+                long lastPassed = hooks == null ? 0 : hooks.LastPassedLeftDown;
+                long lastUp = hooks == null ? 0 : hooks.LastPassedLeftUp;
+                double late = lastPassed > releaseAt ? (lastPassed - releaseAt) * 1000.0 / Stopwatch.Frequency : 0;
+                double lateUp = lastUp > releaseAt ? (lastUp - releaseAt) * 1000.0 / Stopwatch.Frequency : 0;
+                RecordTiming("中键松开后1.2秒：新增模拟左键按下提交=" + sent +
+                    "；钩子放行=" + passed + "；迟到按下拦截=" + blocked +
+                    "；新增左键抬起提交=" + upsSent + "；钩子放行=" + upsPassed +
+                    "；最后按下放行晚于松开=" + late.ToString("0.0") +
+                    "ms；最后抬起放行晚于松开=" + lateUp.ToString("0.0") + "ms；宏仍运行=" + engine.IsRunning);
+            });
+        }
         private void ProtectOwnWindow(InputStroke stroke)
         {
             uint foregroundProcess;
@@ -93,7 +140,29 @@ namespace RazerBatteryTray.Macros
             bool chord = stroke.Down && stroke.Trigger == TriggerKind.Middle && stroke.RightButtonDown;
             string activeBefore = chord ? engine.ActiveBinding : null;
             long sentBefore = chord && windowsOutput != null ? windowsOutput.TotalInputsSent : 0;
+            bool trace = stroke.Trigger == TriggerKind.Middle || stroke.Trigger == TriggerKind.Right;
+            bool runningBefore = trace && engine.IsRunning;
             bool suppress = router.Handle(stroke);
+            if (trace)
+            {
+                long sent = windowsOutput == null ? 0 : windowsOutput.LeftDownsSent;
+                long passed = hooks == null ? 0 : hooks.PassedLeftDowns;
+                long upsSent = windowsOutput == null ? 0 : windowsOutput.LeftUpsSent;
+                long upsPassed = hooks == null ? 0 : hooks.PassedLeftUps;
+                long blocked = hooks == null ? 0 : hooks.BlockedStoppedDowns;
+                RecordTiming(stroke.Trigger + (stroke.Down ? "按下" : "松开") +
+                    "；右键按住=" + stroke.RightButtonDown + "；修饰键=" + stroke.Modifiers +
+                    "；宏运行=" + runningBefore + "→" + engine.IsRunning +
+                    "；拦截原键=" + suppress + "；左键按下提交=" + sent +
+                    "；钩子放行=" + passed + "；左键抬起提交=" + upsSent +
+                    "；钩子放行=" + upsPassed + "；迟到按下拦截=" + blocked);
+                if (stroke.Trigger == TriggerKind.Middle)
+                {
+                    int sequence = Interlocked.Increment(ref timingSequence);
+                    if (!stroke.Down) RecordReleaseSummary(Stopwatch.GetTimestamp(), sent, passed,
+                        upsSent, upsPassed, blocked, sequence);
+                }
+            }
             if (chord)
             {
                 string activeAfter = engine.ActiveBinding;

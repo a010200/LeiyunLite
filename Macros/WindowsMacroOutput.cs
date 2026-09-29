@@ -9,6 +9,7 @@ namespace RazerBatteryTray.Macros
     internal sealed class WindowsMacroOutput : IMacroOutput
     {
         internal static readonly UIntPtr InputTag = new UIntPtr(0x4C594C31);
+        private const ulong TagMarker = 0x4C594C31UL;
         [StructLayout(LayoutKind.Sequential)] internal struct Input { public uint Type; public InputData Data; }
         [StructLayout(LayoutKind.Explicit)] internal struct InputData
         {
@@ -21,7 +22,43 @@ namespace RazerBatteryTray.Macros
         { public ushort Key, Scan; public uint Flags, Time; public UIntPtr Extra; }
         [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
         private long totalInputsSent;
+        private long leftDownsSent, leftUpsSent;
+        // The low half identifies our input; the high half identifies its run.
+        // A canceled run stays recognizable even if another macro starts.
+        private long generation, cancelledThrough, activeTag = (long)TagMarker;
         internal long TotalInputsSent { get { return Interlocked.Read(ref totalInputsSent); } }
+        internal long LeftDownsSent { get { return Interlocked.Read(ref leftDownsSent); } }
+        internal long LeftUpsSent { get { return Interlocked.Read(ref leftUpsSent); } }
+        internal UIntPtr CurrentInputTag
+        {
+            get
+            {
+                ulong value = unchecked((ulong)Interlocked.Read(ref activeTag));
+                return IntPtr.Size == 8 ? new UIntPtr(value) : new UIntPtr((uint)value);
+            }
+        }
+        internal static bool IsOwnInputTag(UIntPtr tag)
+        {
+            return (tag.ToUInt64() & 0xFFFFFFFFUL) == TagMarker;
+        }
+        internal void BeginRun()
+        {
+            long next = Interlocked.Increment(ref generation);
+            Interlocked.Exchange(ref activeTag, unchecked((long)(((ulong)(uint)next << 32) | TagMarker)));
+        }
+        internal void CancelRun()
+        {
+            Interlocked.Exchange(ref cancelledThrough, Interlocked.Read(ref generation));
+        }
+        internal bool ShouldSuppressStoppedDown(UIntPtr tag)
+        {
+            if (!IsOwnInputTag(tag)) return false;
+            // The shipped desktop build is x64. A 32-bit legacy host has no
+            // room for the run generation, so it must not block later runs.
+            if (IntPtr.Size != 8) return false;
+            ulong run = tag.ToUInt64() >> 32;
+            return run != 0 && run <= (ulong)Interlocked.Read(ref cancelledThrough);
+        }
         private void Send(params Input[] inputs)
         {
             if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) != inputs.Length)
@@ -32,7 +69,7 @@ namespace RazerBatteryTray.Macros
         {
             bool extended = key == 163 || key == 165 || (key >= 33 && key <= 46) || key == 91 || key == 92 || key == 93 || key == 111 || key == 144;
             Send(new Input { Type = 1, Data = new InputData { Keyboard = new KeyboardInput {
-                Key = (ushort)key, Flags = (down ? 0u : 2u) | (extended ? 1u : 0u), Extra = InputTag } } });
+                Key = (ushort)key, Flags = (down ? 0u : 2u) | (extended ? 1u : 0u), Extra = CurrentInputTag } } });
         }
         public void MouseButton(MouseAction button, bool down)
         {
@@ -46,11 +83,16 @@ namespace RazerBatteryTray.Macros
                 case MouseAction.X2: flags = down ? 0x80u : 0x100u; data = 2; break;
                 default: throw new ArgumentException("不是鼠标按钮。");
             }
-            Send(new Input { Data = new InputData { Mouse = new MouseInput { Flags = flags, Data = data, Extra = InputTag } } });
+            Send(new Input { Data = new InputData { Mouse = new MouseInput { Flags = flags, Data = data, Extra = CurrentInputTag } } });
+            if (button == MouseAction.Left)
+            {
+                if (down) Interlocked.Increment(ref leftDownsSent);
+                else Interlocked.Increment(ref leftUpsSent);
+            }
         }
         public void Wheel(int notches)
         {
-            Send(new Input { Data = new InputData { Mouse = new MouseInput { Flags = 0x0800, Data = unchecked((uint)(notches * 120)), Extra = InputTag } } });
+            Send(new Input { Data = new InputData { Mouse = new MouseInput { Flags = 0x0800, Data = unchecked((uint)(notches * 120)), Extra = CurrentInputTag } } });
         }
         public void Text(string text, CancellationToken token)
         {
@@ -65,8 +107,8 @@ namespace RazerBatteryTray.Macros
                 }
                 else
                 {
-                    var up = new Input { Type = 1, Data = new InputData { Keyboard = new KeyboardInput { Scan = ch, Flags = 6, Extra = InputTag } } };
-                    try { Send(new Input { Type = 1, Data = new InputData { Keyboard = new KeyboardInput { Scan = ch, Flags = 4, Extra = InputTag } } }); }
+                    var up = new Input { Type = 1, Data = new InputData { Keyboard = new KeyboardInput { Scan = ch, Flags = 6, Extra = CurrentInputTag } } };
+                    try { Send(new Input { Type = 1, Data = new InputData { Keyboard = new KeyboardInput { Scan = ch, Flags = 4, Extra = CurrentInputTag } } }); }
                     finally { Send(up); }
                 }
             }

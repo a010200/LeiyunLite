@@ -29,6 +29,18 @@ namespace RazerBatteryTray.Tests
             Control.CheckForIllegalCrossThreadCalls = true;
             artifacts = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "artifacts");
             Directory.CreateDirectory(artifacts);
+            if (Array.IndexOf(args, "--macro-timing-only") >= 0)
+            {
+                MacroTests.RunTimingOnly(Test);
+                Write(string.Format("RESULT: {0} passed, {1} failed", passed, failed));
+                return failed == 0 ? 0 : 1;
+            }
+            if (Array.IndexOf(args, "--macro-core-only") >= 0)
+            {
+                MacroTests.RunCoreOnly(Test, artifacts);
+                Write(string.Format("RESULT: {0} passed, {1} failed", passed, failed));
+                return failed == 0 ? 0 : 1;
+            }
             MacroTests.Run(Test, artifacts);
             Test("Protocol layout, checksum, report ID and rate mapping", TestProtocol);
             Test("HID decoding with 90-byte feature reports", () => TestDevice(90));

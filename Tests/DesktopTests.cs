@@ -24,7 +24,7 @@ namespace RazerBatteryTray.Desktop
         private static int Main()
         {
             artifacts = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "artifacts"); Directory.CreateDirectory(artifacts);
-            Test("v1.2.2 assembly, display and update version consistency", VersionMetadata);
+            Test("v1.2.3 assembly, display and update version consistency", VersionMetadata);
             Test("Update handoff blocks draft, recording, running macros and failed safety saves", UpdateHandoffSafety);
             Test("Explicit capabilities: SE includes 500, no speculative 8k or unknown writes", Capabilities);
             Test("Verified DPI preserves all other stages (90 and 91 byte reports)", Dpi);

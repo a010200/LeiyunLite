@@ -70,7 +70,14 @@ namespace RazerBatteryTray.Desktop
             libraryTools.Margin = new Thickness(0, 0, 24, 0); toolbar.Children.Add(libraryTools); Grid.SetColumn(runTools, 1); toolbar.Children.Add(runTools);
             inputDiagnostic = Ui.Text(shell.Macros == null ? Ui.T("安全预览不监听输入。", "Safe preview does not monitor input.") : shell.Macros.InputDiagnostic, 12, Ui.Muted);
             inputDiagnostic.TextWrapping = TextWrapping.Wrap; inputDiagnostic.Margin = new Thickness(0, 0, 0, 10);
-            var toolsAndStatus = Ui.Stack(toolbar, inputDiagnostic, BuildRecordingStatus()); Grid.SetRow(toolsAndStatus, 1); root.Children.Add(toolsAndStatus);
+            var copyTiming = Tool(Ui.T("复制输入时序", "Copy input timing"), () => {
+                if (shell.Macros == null) return;
+                try { Clipboard.SetText(shell.Macros.CopyInputTiming()); shell.Notice(Ui.T("输入时序已复制。", "Input timing copied.")); }
+                catch (Exception ex) { shell.Notice(Ui.T("复制失败：", "Copy failed: ") + ex.Message); }
+            });
+            copyTiming.IsEnabled = shell.Macros != null;
+            copyTiming.HorizontalAlignment = HorizontalAlignment.Left;
+            var toolsAndStatus = Ui.Stack(toolbar, inputDiagnostic, copyTiming, BuildRecordingStatus()); Grid.SetRow(toolsAndStatus, 1); root.Children.Add(toolsAndStatus);
             workspace = new Grid(); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) }); workspace.ColumnDefinitions.Add(new ColumnDefinition()); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) }); Grid.SetRow(workspace, 2); root.Children.Add(workspace);
             var palette = Ui.Stack(Ui.Text(Ui.T("添加动作", "Add action"), 15));
             for (int i = 0; i < 8; i++) { var kind = (ActionKind)i; var b = Ui.Button("+  " + Actions[i], () => { if (Selected == null) { shell.Notice(Ui.T("请先新建一个宏。", "Create a macro first.")); return; } addingKind = kind; EditStep(false); }); b.Padding = new Thickness(10, 11, 8, 11); b.HorizontalContentAlignment = HorizontalAlignment.Left; b.Background = Brushes.Transparent; b.BorderThickness = new Thickness(0); palette.Children.Add(b); }

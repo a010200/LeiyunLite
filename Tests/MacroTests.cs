@@ -17,16 +17,37 @@ namespace RazerBatteryTray.Tests
         public static void Run(Action<string, Action> test, string directory)
         {
             artifacts = directory;
-            test("Macro sequence: keyboard, mouse, wheel, text, launch, command, nested loops and calls", Sequence);
-            test("Macro cancellation / exception / disposal releases held input; busy start rejected", Cancellation);
-            test("1ms repeating macro has no hidden 25ms loop penalty", Timing);
-            test("Macro execution budget bounds nested empty loops", Budget);
-            test("Macro validation rejects recursion, missing targets, unbalanced loops and bad bindings", Validation);
-            test("Binding router: once, hold, toggle, suppression, injection, disable and emergency stop", Bindings);
-            test("Macro XML round trip, atomic backup, corrupt and DTD rejection", Persistence);
+            RunCore(test);
             test("Macro editor / step / binding dialogs render, edit, save and reload", Editor);
             test("Native input hooks and SendInput Unicode to an isolated test window", NativeInput);
             test("Native callback decoding: modifiers, key-up, mouse buttons, fractional wheel and injected flags", HookDecoding);
+        }
+        public static void RunCoreOnly(Action<string, Action> test, string directory)
+        {
+            artifacts = directory;
+            RunCore(test);
+        }
+        private static void RunCore(Action<string, Action> test)
+        {
+            test("Macro sequence: keyboard, mouse, wheel, text, launch, command, nested loops and calls", Sequence);
+            test("Macro cancellation / exception / disposal releases held input; busy start rejected", Cancellation);
+            test("1ms repeating macro has no hidden 25ms loop penalty", Timing);
+            test("1ms scheduler does not replay missed delays after a stall", SchedulerAfterStall);
+            test("1ms held-middle macro stops with a final left-button release", HeldMiddleRelease);
+            test("Canceled macro input drops late downs but preserves ups and a new run", StoppedInputBarrier);
+            test("In-memory input timing records only relevant buttons and a release summary", InputTimingSummary);
+            test("Macro execution budget bounds nested empty loops", Budget);
+            test("Macro validation rejects recursion, missing targets, unbalanced loops and bad bindings", Validation);
+            test("Binding router: once, hold, toggle, suppression, injection, disable and emergency stop", Bindings);
+            test("Mouse binding ignores unrelated Shift while explicit modifier wins", MouseModifierIndependence);
+            test("Physical right plus Shift plus middle chord starts and stops its own macro", RightShiftMiddleChord);
+            test("Macro XML round trip, atomic backup, corrupt and DTD rejection", Persistence);
+        }
+        public static void RunTimingOnly(Action<string, Action> test)
+        {
+            test("1ms repeating macro has no hidden 25ms loop penalty", Timing);
+            test("1ms scheduler does not replay missed delays after a stall", SchedulerAfterStall);
+            test("1ms held-middle macro stops with a final left-button release", HeldMiddleRelease);
         }
         private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
         private static void Reject(Action action) { bool threw = false; try { action(); } catch { threw = true; } Check(threw, "Expected rejection"); }
@@ -84,6 +105,102 @@ namespace RazerBatteryTray.Tests
             }
             Check(output.SpanMilliseconds < 200, "Hidden repeat delay remains: " + output.SpanMilliseconds.ToString("0.0") + " ms");
         }
+        private static void SchedulerAfterStall()
+        {
+            using (var scheduler = new PrecisionScheduler(CancellationToken.None))
+            {
+                scheduler.Wait(1);
+                Thread.Sleep(40);
+                var watch = Stopwatch.StartNew();
+                for (int i = 0; i < 3; i++) scheduler.Wait(1);
+                watch.Stop();
+                Check(watch.Elapsed.TotalMilliseconds >= 2.0,
+                    "Missed 1ms waits were replayed as a burst: " + watch.Elapsed.TotalMilliseconds.ToString("0.00") + " ms");
+            }
+        }
+        private static void HeldMiddleRelease()
+        {
+            var lib = Library(
+                new MacroStep { Kind = ActionKind.Mouse, Mouse = MouseAction.Left, Press = PressMode.Down },
+                new MacroStep { Kind = ActionKind.Delay, Number = 1 },
+                new MacroStep { Kind = ActionKind.Mouse, Mouse = MouseAction.Left, Press = PressMode.Up },
+                new MacroStep { Kind = ActionKind.Delay, Number = 1 },
+                new MacroStep { Kind = ActionKind.Mouse, Mouse = MouseAction.Left, Press = PressMode.Down },
+                new MacroStep { Kind = ActionKind.Delay, Number = 1 },
+                new MacroStep { Kind = ActionKind.Mouse, Mouse = MouseAction.Left, Press = PressMode.Up });
+            lib.Bindings.Add(new MacroBinding { MacroId = "main", Trigger = TriggerKind.Middle,
+                Mode = RunMode.WhileHeld, SuppressOriginal = true });
+            var output = new Output();
+            using (var engine = new MacroEngine(output))
+            {
+                var router = new BindingRouter(engine); router.Configure(lib);
+                router.Handle(new InputStroke { Trigger = TriggerKind.Right, Down = true });
+                Check(router.Handle(new InputStroke { Trigger = TriggerKind.Middle, Down = true }), "Middle did not start");
+                Until(() => output.Count >= 100);
+                router.Handle(new InputStroke { Trigger = TriggerKind.Right, Down = false });
+                Check(engine.IsRunning, "Releasing unrelated right button stopped middle macro");
+                var watch = Stopwatch.StartNew();
+                Check(router.Handle(new InputStroke { Trigger = TriggerKind.Middle, Down = false }), "Middle release was not paired");
+                Until(() => !engine.IsRunning); watch.Stop();
+                Check(watch.ElapsedMilliseconds < 250, "Macro stop took " + watch.ElapsedMilliseconds + " ms");
+            }
+            var events = output.Snapshot();
+            int downs = 0, ups = 0;
+            foreach (var item in events) { if (item == "MLeft+") downs++; if (item == "MLeft-") ups++; }
+            Check(downs > 0 && ups == downs + 1 && events[events.Length - 1] == "MLeft-",
+                "Canceled repeat did not end with a redundant left-button release");
+            int stoppedCount = output.Count;
+            Thread.Sleep(80);
+            Check(output.Count == stoppedCount, "Output continued after middle release");
+        }
+        private static void StoppedInputBarrier()
+        {
+            var output = new WindowsMacroOutput();
+            output.BeginRun(); UIntPtr oldTag = output.CurrentInputTag;
+            Check(WindowsMacroOutput.IsOwnInputTag(oldTag) && !output.ShouldSuppressStoppedDown(oldTag), "Active run was blocked");
+            output.CancelRun();
+            Check(output.ShouldSuppressStoppedDown(oldTag), "Canceled run was not blocked");
+            output.BeginRun(); UIntPtr newTag = output.CurrentInputTag;
+            Check(newTag != oldTag && !output.ShouldSuppressStoppedDown(newTag) &&
+                output.ShouldSuppressStoppedDown(oldTag), "A new run revived stale input or remained blocked");
+            int physical = 0;
+            using (var hook = new GlobalInputHook(s => { physical++; return false; }, null, output.ShouldSuppressStoppedDown))
+            {
+                foreach (int message in new[] { 0x201, 0x204, 0x207, 0x20B })
+                    Check(Callback(hook, "Mouse", message, new MousePacket { Flags = 1, Extra = oldTag }) == new IntPtr(1),
+                        "Late mouse down reached the target: " + message);
+                Check(Callback(hook, "Keyboard", 0x100, new KeyboardPacket { Flags = 0x10, Extra = oldTag }) == new IntPtr(1),
+                    "Late keyboard down reached the target");
+                Check(Callback(hook, "Mouse", 0x202, new MousePacket { Flags = 1, Extra = oldTag }) != new IntPtr(1),
+                    "Mouse up was blocked");
+                Check(hook.PassedLeftUps == 1 && hook.BlockedStoppedDowns == 1,
+                    "Stopped-run mouse up was not observable or the blocked-down count was wrong");
+                Check(Callback(hook, "Keyboard", 0x101, new KeyboardPacket { Flags = 0x10, Extra = oldTag }) != new IntPtr(1),
+                    "Keyboard up was blocked");
+                Check(Callback(hook, "Mouse", 0x201, new MousePacket { Flags = 1, Extra = newTag }) != new IntPtr(1),
+                    "New macro mouse down was blocked");
+                Callback(hook, "Mouse", 0x201, new MousePacket());
+                Check(physical == 1, "Physical left button was blocked or injected input was rerouted");
+            }
+        }
+        private static void InputTimingSummary()
+        {
+            var store = new MacroStore(Path.Combine(artifacts, "timing-" + Guid.NewGuid().ToString("N"), "macros.xml"));
+            using (var controller = new MacroController(store, new Output(), false))
+            {
+                Check(controller.CopyInputTiming().Contains("尚无相关输入"), "Empty timing state was not reported");
+                Call(controller, "RouteInput", new InputStroke { Trigger = TriggerKind.Keyboard, Key = 65, Down = true });
+                Call(controller, "RouteInput", new InputStroke { Trigger = TriggerKind.Right, Down = true, RightButtonDown = true });
+                Call(controller, "RouteInput", new InputStroke { Trigger = TriggerKind.Middle, Down = true, RightButtonDown = true });
+                Call(controller, "RouteInput", new InputStroke { Trigger = TriggerKind.Middle, Down = false, RightButtonDown = true });
+                Until(() => controller.CopyInputTiming().Contains("中键松开后1.2秒"));
+                string timing = controller.CopyInputTiming();
+                Check(timing.Contains("Right按下") && timing.Contains("Middle松开") &&
+                    timing.Contains("新增模拟左键按下提交=0") && timing.Contains("新增左键抬起提交=0") &&
+                    !timing.Contains("Keyboard") && !timing.Contains("Key=65"),
+                    "Timing export missed its release summary or captured unrelated keyboard input");
+            }
+        }
         private static void Budget()
         {
             var lib = Library(new MacroStep { Kind = ActionKind.LoopStart, Number = 1000 }, new MacroStep { Kind = ActionKind.LoopStart, Number = 1000 },
@@ -109,6 +226,65 @@ namespace RazerBatteryTray.Tests
             Reject(() => MacroValidation.Validate(chain));
         }
         private static InputStroke Stroke(TriggerKind kind, bool down = true) { return new InputStroke { Trigger = kind, Key = 117, Down = down }; }
+        private static void MouseModifierIndependence()
+        {
+            var lib = Library(new MacroStep());
+            var plain = new MacroBinding { MacroId = "main", Trigger = TriggerKind.Middle,
+                Mode = RunMode.WhileHeld, SuppressOriginal = true };
+            lib.Bindings.Add(plain);
+            var runner = new Runner(); var router = new BindingRouter(runner); router.Configure(lib);
+            router.Handle(new InputStroke { Trigger = TriggerKind.Right, Down = true });
+            router.Handle(new InputStroke { Trigger = TriggerKind.Keyboard, Key = 160, Down = true, Modifiers = KeyModifiers.Shift });
+            Check(router.Handle(new InputStroke { Trigger = TriggerKind.Middle, Down = true, Modifiers = KeyModifiers.Shift,
+                RightButtonDown = true }), "Unmodified middle binding failed while Shift was held");
+            Check(runner.Starts == 1 && runner.ActiveBinding == plain.Id, "Middle started wrong binding");
+            router.Handle(new InputStroke { Trigger = TriggerKind.Keyboard, Key = 160, Down = false });
+            Check(runner.IsRunning, "Releasing Shift stopped a held middle binding");
+            Check(router.Handle(new InputStroke { Trigger = TriggerKind.Middle, Down = false }), "Middle up was not paired");
+            Check(!runner.IsRunning, "Middle up did not stop the macro");
+            router.Handle(new InputStroke { Trigger = TriggerKind.Right, Down = false });
+
+            var shifted = new MacroBinding { MacroId = "main", Trigger = TriggerKind.Middle,
+                Modifiers = KeyModifiers.Shift, Mode = RunMode.WhileHeld, SuppressOriginal = true };
+            lib.Bindings.Add(shifted); MacroValidation.Validate(lib); router.Configure(lib);
+            Check(router.Handle(new InputStroke { Trigger = TriggerKind.Middle, Down = true, Modifiers = KeyModifiers.Shift }),
+                "Shift+Middle binding did not trigger");
+            Check(runner.ActiveBinding == shifted.Id, "Explicit Shift+Middle binding did not win over plain Middle");
+            router.Handle(new InputStroke { Trigger = TriggerKind.Middle, Down = false });
+            Check(!runner.IsRunning, "Explicit Shift+Middle did not stop on Middle up");
+
+            var wheel = new MacroBinding { MacroId = "main", Trigger = TriggerKind.WheelUp, SuppressOriginal = true };
+            lib.Bindings.Add(wheel); router.Configure(lib);
+            Check(router.SuppressWheel(new InputStroke { Trigger = TriggerKind.WheelUp, Down = true,
+                Modifiers = KeyModifiers.Shift }), "Plain wheel binding lost suppression while Shift was held");
+            var shiftedWheel = new MacroBinding { MacroId = "main", Trigger = TriggerKind.WheelUp,
+                Modifiers = KeyModifiers.Shift, SuppressOriginal = false };
+            lib.Bindings.Add(shiftedWheel); MacroValidation.Validate(lib); router.Configure(lib);
+            Check(!router.SuppressWheel(new InputStroke { Trigger = TriggerKind.WheelUp, Down = true,
+                Modifiers = KeyModifiers.Shift }), "Explicit wheel binding did not determine suppression");
+        }
+        private static void RightShiftMiddleChord()
+        {
+            var lib = Library(new MacroStep());
+            var binding = new MacroBinding { MacroId = "main", Trigger = TriggerKind.Middle,
+                Mode = RunMode.WhileHeld, SuppressOriginal = true };
+            lib.Bindings.Add(binding);
+            var runner = new Runner(); var router = new BindingRouter(runner); router.Configure(lib);
+            using (var hook = new GlobalInputHook(router.Handle))
+            {
+                Callback(hook, "Mouse", 0x204, new MousePacket());
+                Callback(hook, "Keyboard", 0x100, new KeyboardPacket { Key = 160 });
+                Check(Callback(hook, "Mouse", 0x207, new MousePacket()) == new IntPtr(1),
+                    "Right+Shift+Middle did not start or intercept its binding");
+                Check(runner.IsRunning && runner.ActiveBinding == binding.Id, "Wrong macro started for chord");
+                Callback(hook, "Keyboard", 0x101, new KeyboardPacket { Key = 160 });
+                Callback(hook, "Mouse", 0x205, new MousePacket());
+                Check(runner.IsRunning, "Shift or right release stopped the middle macro");
+                Check(Callback(hook, "Mouse", 0x208, new MousePacket()) == new IntPtr(1),
+                    "Middle release was not intercepted");
+                Check(!runner.IsRunning, "Middle release did not stop the macro");
+            }
+        }
         private static void Bindings()
         {
             var lib = Library(new MacroStep()); var binding = new MacroBinding { MacroId = "main", KeyCode = 117, SuppressOriginal = true }; lib.Bindings.Add(binding);
