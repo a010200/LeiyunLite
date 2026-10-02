@@ -19,7 +19,7 @@ cd LeiyunLite
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-VSCode.ps1 -Configuration Release
 ```
 
-程序位于 `bin\VSCode1.2.3\LeiyunLite.Desktop.exe`。省略 `-Configuration Release` 时为 Debug 开发构建。图标及嵌入图片已随源码提供，不依赖开发者缓存。解决方案保留 `LeiyunLite.R3.sln` 旧文件名以兼容既有编辑器设置，其构建内容是当前 v1.2.3 源码。
+程序位于 `bin\VSCode1.2.4\LeiyunLite.Desktop.exe`。省略 `-Configuration Release` 时为 Debug 开发构建。图标及嵌入图片已随源码提供，不依赖开发者缓存。解决方案保留 `LeiyunLite.R3.sln` 旧文件名以兼容既有编辑器设置，其构建内容是当前本地 v1.2.4 源码（未发布）。
 
 ## 无 Visual Studio 的脚本构建
 
@@ -29,15 +29,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-VSCode.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 ```
 
-程序位于 `bin\Desktop1.2.3\LeiyunLite.Desktop.exe`。脚本还会从 `Tools/LiteIconBuilder.cs` 重新生成图标。无需第三方 NuGet 包。
+程序位于 `bin\Desktop1.2.4\LeiyunLite.Desktop.exe`。脚本还会从 `Tools/LiteIconBuilder.cs` 重新生成图标。无需第三方 NuGet 包。
 
 ## VS Code
 
 打开仓库内的 `LeiyunLite.code-workspace`，安装微软 C# 扩展。工作区选择适用于传统 Framework 项目的 OmniSharp 模式，而非 C# Dev Kit 的现代项目系统。
 
 - Ctrl+Shift+B：构建。
-- 终端 → 运行任务 → v1.2.3: Safe preview：构建并以 `--demo` 查看模拟界面。
-- v1.2.3: Desktop tests：运行桌面测试，测试过程会打开窗口。
+- 终端 → 运行任务 → v1.2.4: Safe preview：构建并以 `--demo` 查看模拟界面。
+- v1.2.4: Desktop tests：运行桌面测试，测试过程会打开窗口。
 - 尚未提供 F5 断点调试配置。
 
 如果 C# 扩展报错，但命令行构建成功，先查看“输出 → OmniSharp 日志”；不要因此盲目修改应用目标框架。不同版本的扩展与 MSBuild 可能存在程序集兼容问题，参考 [微软 C# 扩展项目](https://github.com/dotnet/vscode-csharp)。个人的 `dotnet.server.path` 只能指向自己机器上实际存在的工具；如需设置，放入被 Git 忽略的 `.vscode/settings.json`，不要提交绝对路径、扩展副本或账号资料。
@@ -60,6 +60,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1 -Tes
 
 ## 安装器和签名更新包
 
-另需 Inno Setup 7。运行 `Tools/Build-Installer.ps1 -KeyFile <仓库之外的DPAPI密钥路径>`，输出在独立的 bin/Release1.2.3-时间目录。其他开发者可构建主程序；签发官方安装版更新需要项目持有人密钥，不能把测试私钥放进公开构建产物。
+另需 Inno Setup 7。使用 PowerShell 7 运行 `Tools/Build-Installer.ps1 -KeyFile <仓库之外的DPAPI密钥路径>`，输出在独立的 bin/Release1.2.4-时间目录；编译器参数使用 Inno Setup 7 的 `--define`。其他开发者可构建主程序；签发本项目安装版更新需要项目持有人密钥，不能把测试私钥放进公开构建产物。
 
 `Tools/Test-Updater.ps1` 使用内存测试密钥、隔离目录和专用注册表键；`Tools/Test-Installer.ps1 -PackageDirectory <构建输出目录>` 编译测试 AppId 安装器，创建并移除专用测试快捷方式，不修改日常宏配置。更多安全边界见 [安装与更新](INSTALLING.md)。
+
+## v1.2.4 针对性修复验证
+
+`Tests/Run-FixVerification.ps1 -Case Final` 执行七项缺陷的有限回归，使用 Fake HID 与隔离配置，不启用真实硬件写入；`Tests/Run-FixUpdater.ps1` 执行更新器短/长路径及路径预算测试。报告写入本机 `test-artifacts/fixes/`，不随公开源码上传。需要 .NET Framework 4.8 和可交互 Windows 桌面；脚本使用 PowerShell 7 运行。
+
+`-Case Hardware` 是另行授权后的只读实机入口，要求其他雷云 Lite 实例已正常退出。本轮未重新运行大型 Fuzz/压力矩阵；完整测试代码保留为独立测试源，不加入软件项目编译。

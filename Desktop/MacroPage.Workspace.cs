@@ -27,6 +27,8 @@ namespace RazerBatteryTray.Desktop
         private Point dragStart;
         private int dragIndex = -1;
         private bool inlineOpen;
+        internal bool IsBindingsTab { get { return bindingWorkspace != null && bindingWorkspace.Visibility == Visibility.Visible; } }
+        internal void RestoreWorkspace(string selectedMacro, bool binding) { ReloadLibrary(selectedMacro); SelectTab(binding); }
         private bool pendingEdit;
         private Button pendingDone;
         private MacroDefinition editingMacro;

@@ -26,16 +26,23 @@ namespace RazerBatteryTray.Desktop
         public DesktopPreferences Load()
         {
             if (!File.Exists(path)) return new DesktopPreferences();
-            using (var reader = XmlReader.Create(path, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 65536 }))
-            {
+            try {
+                using (var reader = XmlReader.Create(path, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 65536 }))
+                {
                 var result = (DesktopPreferences)new XmlSerializer(typeof(DesktopPreferences)).Deserialize(reader);
+                if (result == null) return new DesktopPreferences();
                 if (result.Theme != "light") result.Theme = "dark";
                 if (result.Language != "zh" && result.Language != "en") result.Language = "system";
                 if (result.LowBatteryThreshold != 10 && result.LowBatteryThreshold != 15 && result.LowBatteryThreshold != 20) result.LowBatteryThreshold = 20;
                 if (!result.AutoCheckUpdates) result.AutoDownloadUpdates = result.AutoInstallUpdates = false;
                 if (!result.AutoDownloadUpdates) result.AutoInstallUpdates = false;
                 return result;
+                }
             }
+            catch (InvalidOperationException) { return new DesktopPreferences(); }
+            catch (XmlException) { return new DesktopPreferences(); }
+            catch (IOException) { return new DesktopPreferences(); }
+            catch (UnauthorizedAccessException) { return new DesktopPreferences(); }
         }
         public void Save(DesktopPreferences settings)
         {

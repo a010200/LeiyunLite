@@ -9,7 +9,7 @@ try {
  $registry='HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\LeiyunLite-InstallTest_is1'
  if(Test-Path -LiteralPath $registry){throw 'Existing isolated test installation must be inspected first'}
  $version=[regex]::Match([IO.File]::ReadAllText((Join-Path $root 'Properties\AssemblyInfo.cs')),'Number = "([^"]+)"').Groups[1].Value
- & .\.local-tools\InnoSetup7\ISCC.exe ('/DBuildSource='+$package+'\installer-source') ('/DAppVersion='+$version) ('/DOutputRoot='+$test) /DTestInstall Installer\LeiyunLite.iss
+ & .\.local-tools\InnoSetup7\ISCC.exe ('--define=BuildSource='+$package+'\installer-source') ('--define=AppVersion='+$version) ('--define=OutputRoot='+$test) --define=TestInstall Installer\LeiyunLite.iss
  if($LASTEXITCODE -ne 0){throw 'Isolated installer compilation failed'}
  $setup=Join-Path $test ('LeiyunLite-v'+$version+'-Setup-TEST-x64.exe')
  $app=Join-Path $test 'app'

@@ -44,8 +44,8 @@ try {
  $utf8=[Text.UTF8Encoding]::new($false)
  [IO.File]::WriteAllText((Join-Path $stage 'install.id'),'LeiyunLite.Install.v1',$utf8)
  [IO.File]::WriteAllText((Join-Path $stage 'current.json'),('{"Current":"'+$version+'"}'),$utf8)
- $isArgs=@(('/DBuildSource='+$stage),('/DAppVersion='+$version),('/DOutputRoot='+$OutputDirectory))
- if($TestInstaller){$isArgs+='/DTestInstall'}
+ $isArgs=@(('--define=BuildSource='+$stage),('--define=AppVersion='+$version),('--define=OutputRoot='+$OutputDirectory))
+ if($TestInstaller){$isArgs+='--define=TestInstall'}
  & $Compiler @isArgs 'Installer\LeiyunLite.iss'
  if($LASTEXITCODE -ne 0){throw 'Installer compilation failed'}
  $portable=Join-Path $OutputDirectory 'portable';[void](New-Item -ItemType Directory -Path $portable)

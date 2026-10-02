@@ -19,7 +19,7 @@ namespace RazerBatteryTray.Desktop
         private ReleaseVersion(int a, int b, int c, int r) { major = a; minor = b; patch = c; revision = r; }
         internal static ReleaseVersion Parse(string value)
         {
-            var m = Regex.Match(value ?? "", @"^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-r([1-9]\d*))?$");
+            var m = Regex.Match(value ?? "", @"\Av?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-r([1-9]\d*))?\z");
             int a, b, c, r = -1;
             if (!m.Success || !int.TryParse(m.Groups[1].Value, out a) || !int.TryParse(m.Groups[2].Value, out b) || !int.TryParse(m.Groups[3].Value, out c) || (m.Groups[4].Success && !int.TryParse(m.Groups[4].Value, out r))) return null;
             return new ReleaseVersion(a, b, c, r);

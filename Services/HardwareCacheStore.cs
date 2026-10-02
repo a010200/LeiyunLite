@@ -48,40 +48,37 @@ namespace RazerBatteryTray
                     if (key != null)
                     {
                         if (activeDeviceKey != null && (string)key.GetValue("CatalogRevision", "") != RazerIdentityCatalog.Revision) return;
-                        CachedBatteryKnown = (int)key.GetValue("BatteryKnown", 0) == 1;
+                        var known = key.GetValue("BatteryKnown");
                         var batt = key.GetValue("BatteryPercent");
-                        if (batt != null)
-                        {
-                            int b = (int)batt;
-                            if (b >= 0 && b <= 100) CachedBatteryPercent = b;
-                        }
+                        CachedBatteryKnown = known is int && (int)known == 1 && batt is int && (int)batt >= 0 && (int)batt <= 100;
+                        CachedBatteryPercent = CachedBatteryKnown ? (int)batt : 0;
 
                         var dev = key.GetValue("DeviceName");
                         if (dev != null) CachedDeviceName = (string)dev;
 
                         var dpi = key.GetValue("Dpi");
-                        if (dpi != null) CachedDpi = (int)dpi;
+                        CachedDpi = dpi is int && (int)dpi >= 100 && (int)dpi <= 35000 ? (int)dpi : 0;
 
                         var st = key.GetValue("DpiStage");
-                        if (st != null) CachedDpiStage = (int)st;
-
                         var stCount = key.GetValue("DpiStageCount");
-                        if (stCount != null) CachedDpiStageCount = (int)stCount;
-
                         var stStr = key.GetValue("DpiStages") as string;
-                        if (!string.IsNullOrEmpty(stStr))
+                        CachedDpiStage = CachedDpiStageCount = 0; CachedDpiStages = null;
+                        if (stCount is int && (int)stCount >= 1 && (int)stCount <= 5 &&
+                            st is int && (int)st >= 1 && (int)st <= (int)stCount && !string.IsNullOrEmpty(stStr))
                         {
-                            string[] parts = stStr.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-                            CachedDpiStages = new int[parts.Length];
-                            for (int i = 0; i < parts.Length; i++)
-                            {
-                                int p;
-                                if (int.TryParse(parts[i], out p)) CachedDpiStages[i] = p;
+                            string[] parts = stStr.Split(',');
+                            if (parts.Length == (int)stCount) {
+                                var stages = new int[parts.Length]; bool valid = true;
+                                for (int i = 0; i < parts.Length; i++) {
+                                    if (!int.TryParse(parts[i], out stages[i]) || stages[i] < 100 || stages[i] > 35000) { valid = false; break; }
+                                }
+                                if (valid) { CachedDpiStages = stages; CachedDpiStageCount = stages.Length; CachedDpiStage = (int)st; }
                             }
                         }
 
                         var poll = key.GetValue("PollingRate");
-                        if (poll != null) CachedPollingRate = (int)poll;
+                        int hz = poll is int ? (int)poll : 0;
+                        CachedPollingRate = hz == 125 || hz == 500 || hz == 1000 || hz == 2000 || hz == 4000 || hz == 8000 ? hz : 0;
 
                         var updatedStr = key.GetValue("LastUpdated") as string;
                         if (!string.IsNullOrEmpty(updatedStr))

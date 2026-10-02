@@ -19,7 +19,7 @@ namespace RazerBatteryTray
         internal static bool TryDecodeRotationPayload(byte[] report, int offset, out int angle)
         {
             angle = 0;
-            if (report == null || offset < 0 || report.Length < offset + 11 ||
+            if (report == null || offset < 0 || offset > report.Length - 11 ||
                 report[offset + 5] < 3 || report[offset + 8] != 1 || report[offset + 9] != 1) return false;
             angle = unchecked((sbyte)report[offset + 10]);
             return angle >= MinimumRotation && angle <= MaximumRotation;

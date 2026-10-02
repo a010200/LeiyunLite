@@ -18,6 +18,7 @@ namespace RazerBatteryTray.Updates
     internal sealed class InstallLayout
     {
         internal const string Marker = "LeiyunLite.Install.v1";
+        internal const int ShortIdLength = 12;
         internal readonly string Root;
         internal string StatePath { get { return Path.Combine(Root, "current.json"); } }
         internal string Launcher { get { return Path.Combine(Root, "LeiyunLite.exe"); } }
@@ -57,9 +58,25 @@ namespace RazerBatteryTray.Updates
             return File.ReadAllText(path, new UTF8Encoding(false, true));
         }
         internal void Save(InstallState state) { Atomic(StatePath, UpdatePackage.Json().Serialize(state)); }
+        internal void CheckUpdatePathBudget(string current, string next)
+        {
+            // Budget legacy Framework paths before extraction creates any transaction files.
+            string staging = Path.Combine(Root, "updates", "s-" + new string('0', ShortIdLength));
+            string suffix = ".~" + new string('0', ShortIdLength);
+            foreach (string directory in new[] { staging, VersionPath(current), VersionPath(next) }) {
+                if (directory.Length >= 248) throw new IOException("安装路径过长，无法安全执行更新。请选择较短的安装路径。");
+                foreach (string name in UpdatePackage.AllowedFiles) CheckFilePathBudget(Path.Combine(directory, name));
+                CheckFilePathBudget(Path.Combine(directory, "update.json") + suffix);
+            }
+            CheckFilePathBudget(StatePath + suffix);
+        }
+        private static void CheckFilePathBudget(string path)
+        {
+            if (path.Length >= 260) throw new IOException("安装路径过长，无法安全执行更新。请选择较短的安装路径。");
+        }
         internal static void Atomic(string path, string content)
         {
-            NoReparse(path); string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            NoReparse(path); string temp = path + ".~" + Guid.NewGuid().ToString("N").Substring(0, ShortIdLength);
             using (var f = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)) {
                 byte[] bytes = new UTF8Encoding(false).GetBytes(content); f.Write(bytes, 0, bytes.Length); f.Flush(true);
             }

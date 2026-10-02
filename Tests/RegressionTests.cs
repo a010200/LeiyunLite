@@ -248,12 +248,13 @@ namespace RazerBatteryTray.Tests
                 }
                 saved = store.Load();
                 Check(saved.RefreshInterval == 60000 && saved.OsdStyle == 0 && saved.TrayIconStyle == 0, "Invalid settings normalization");
-                var cache = new HardwareCacheStore(root + @"\Cache") { CachedBatteryPercent = 73,
+                var cache = new HardwareCacheStore(root + @"\Cache") { CachedBatteryKnown = true, CachedBatteryPercent = 73,
                     CachedDeviceName = "Test Mouse", CachedDpi = 1600, CachedDpiStage = 2, CachedDpiStageCount = 3,
                     CachedDpiStages = new int[] { 400, 1600, 3200 }, CachedPollingRate = 2000, CachedLastUpdated = DateTime.Now };
                 cache.SaveHardwareCache();
                 var loaded = new HardwareCacheStore(root + @"\Cache"); loaded.LoadHardwareCache();
-                Check(loaded.CachedBatteryPercent == 73 && loaded.CachedDpiStages[2] == 3200
+                Check(loaded.CachedBatteryKnown && loaded.CachedBatteryPercent == 73 && loaded.CachedDpi == 1600
+                    && loaded.CachedDpiStage == 2 && loaded.CachedDpiStageCount == 3 && loaded.CachedDpiStages.SequenceEqual(cache.CachedDpiStages)
                     && loaded.CachedLastUpdated == cache.CachedLastUpdated && loaded.CachedPollingRate == 2000, "Hardware cache round trip");
                 using (Registry.CurrentUser.CreateSubKey(root + @"\Run")) { }
                 var auto = new AutoStartService(@"C:\Test Folder\RazerBatteryTray.exe", root + @"\Run");

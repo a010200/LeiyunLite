@@ -55,13 +55,14 @@ namespace RazerBatteryTray.Updates
         {
             var m = UpdatePackage.Verify(envelope, key); var state = layout.Read();
             if (Version.Parse(m.Version) <= Version.Parse(state.Current)) throw new InvalidDataException("Update must be newer than installed version.");
+            layout.CheckUpdatePathBudget(state.Current, m.Version);
             string destination = layout.VersionPath(m.Version);
             if (Directory.Exists(destination)) {
                 var existing = layout.VerifyVersion(m.Version, key);
                 if (existing.Sha256 != m.Sha256) throw new InvalidDataException("Same version has different signed content; use a new version number.");
                 return m.Version;
             }
-            string staging = Path.Combine(layout.Root, "updates", "stage-" + Guid.NewGuid().ToString("N"));
+            string staging = Path.Combine(layout.Root, "updates", "s-" + Guid.NewGuid().ToString("N").Substring(0, InstallLayout.ShortIdLength));
             Directory.CreateDirectory(Path.GetDirectoryName(staging));
             UpdatePackage.Extract(zip, staging, m); InstallLayout.Atomic(Path.Combine(staging, "update.json"), envelope);
             Directory.CreateDirectory(Path.Combine(layout.Root, "versions")); InstallLayout.NoReparse(destination);

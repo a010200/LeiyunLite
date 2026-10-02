@@ -150,10 +150,13 @@ namespace RazerBatteryTray.Desktop
         }
         internal void RebuildPages(int destination)
         {
+            string selectedMacro = macroPage == null || macroPage.Selected == null ? null : macroPage.Selected.Id;
+            bool bindingsTab = macroPage != null && macroPage.IsBindingsTab;
             if (updatePage != null) updatePage.Dispose();
             if (macroPage != null) macroPage.DisposeRecording();
             ApplyLanguage(); pages.Children.Clear();
             devicePage = new DevicePage(this); macroPage = new MacroPage(this);
+            macroPage.RestoreWorkspace(selectedMacro, bindingsTab);
             views[0] = devicePage; views[1] = macroPage; views[2] = BuildSettings(); views[3] = BuildUpdates();
             foreach (var v in views) { v.Visibility = Visibility.Collapsed; pages.Children.Add(v); }
             string[] names = { "◉    " + Ui.T("设备", "Device"), "⌘    " + Ui.T("宏与绑定", "Macros"), "⚙    " + Ui.T("设置", "Settings"), "↓    " + Ui.T("自动更新", "Updates") };

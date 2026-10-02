@@ -12,6 +12,14 @@ obj/
 
 # Machine-local editor settings and development records (keep local copies)
 /.planning/
+/test-artifacts/
+/task_plan.md
+/progress.md
+/findings.md
+/Tests/Build-FixCandidate.ps1
+/Tests/Installer-Isolated.ps1
+/Tests/Lifecycle-Isolated.ps1
+/Tests/Run-FullVerification.ps1
 /.serena/
 /.vscode/settings.json
 /LeiyunLite.R3.code-workspace

@@ -76,11 +76,10 @@ namespace RazerBatteryTray
             var charging = Send(device, p.Transaction, 7, 0x84, 2);
             r.IsCharging = Success(charging, o) && charging[o + 9] == 1;
             byte rateCmd = p.LegacyPolling ? (byte)0x85 : (byte)0xC0;
-            for (int i = 0; i < 3; i++) {
-                var rate = Send(device, p.Transaction, 0, rateCmd, 1, null, 30);
-                if (!Success(rate, o)) continue;
+            // A failed read stays unknown until the next refresh; do not reuse an identical request in this probe.
+            var rate = Send(device, p.Transaction, 0, rateCmd, 1, null, 30);
+            if (Success(rate, o)) {
                 r.PollingRate = p.LegacyPolling ? RazerProtocol.DecodeLegacyPollingRate(rate[o + 8]) : RazerProtocol.DecodePollingRate(rate[o + 9]);
-                if (r.PollingRate > 0) break;
             }
             int rotation;
             if (p.RotationReadVerified && RazerProtocolProfile.SupportsRotation(d) && TryReadRotation(device, out rotation)) {

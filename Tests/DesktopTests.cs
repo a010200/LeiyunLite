@@ -24,7 +24,7 @@ namespace RazerBatteryTray.Desktop
         private static int Main()
         {
             artifacts = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "artifacts"); Directory.CreateDirectory(artifacts);
-            Test("v1.2.3 assembly, display and update version consistency", VersionMetadata);
+            Test(AppVersion.DisplayName + " assembly, display and update version consistency", VersionMetadata);
             Test("Update handoff blocks draft, recording, running macros and failed safety saves", UpdateHandoffSafety);
             Test("Explicit capabilities: SE includes 500, no speculative 8k or unknown writes", Capabilities);
             Test("Verified DPI preserves all other stages (90 and 91 byte reports)", Dpi);
@@ -368,7 +368,9 @@ namespace RazerBatteryTray.Desktop
             string dir = Path.Combine(artifacts, "preferences-" + Guid.NewGuid().ToString("N")); var store = new DesktopSettings(dir);
             store.Save(new DesktopPreferences { Language = "en", ReducedMotion = true, CloseToTray = false, Theme = "light", TrayAnimation = false, LowBatteryThreshold = 15, ConnectionNotifications = true }); var loaded = store.Load();
             Check(loaded.Language == "en" && loaded.ReducedMotion && !loaded.CloseToTray && loaded.Theme == "light" && !loaded.TrayAnimation && loaded.LowBatteryThreshold == 15 && loaded.ConnectionNotifications, "Settings roundtrip");
-            File.WriteAllText(Path.Combine(dir, "desktop.xml"), "<broken>"); bool rejected = false; try { store.Load(); } catch { rejected = true; } Check(rejected, "Corruption is surfaced");
+            string path = Path.Combine(dir, "desktop.xml"); File.WriteAllText(path, "<broken>"); loaded = store.Load();
+            Check(loaded.Theme == "dark" && loaded.Language == "system" && loaded.CloseToTray && loaded.AutoCheckUpdates, "Corruption returns safe defaults");
+            Check(File.ReadAllText(path) == "<broken>", "Corrupt settings are not overwritten");
         }
         private sealed class Transport : IHidTransport { private readonly IHidDevice d; public Transport(IHidDevice device) { d = device; } public void Visit(Func<IHidDevice, bool> visitor) { visitor(d); } }
         private sealed class DeviceFake : IHidDevice, IHidDescriptor
