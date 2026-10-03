@@ -16,6 +16,10 @@ namespace RazerBatteryTray.Desktop
         private readonly Dictionary<TriggerKind, TextBlock> names = new Dictionary<TriggerKind, TextBlock>();
         private readonly Dictionary<TriggerKind, TextBlock> details = new Dictionary<TriggerKind, TextBlock>();
         private readonly Dictionary<TriggerKind, Button> labels = new Dictionary<TriggerKind, Button>();
+        private readonly Dictionary<TriggerKind, Button> pins = new Dictionary<TriggerKind, Button>();
+        private readonly Dictionary<TriggerKind, Polyline> lines = new Dictionary<TriggerKind, Polyline>();
+        private readonly Dictionary<TriggerKind, Ellipse> dots = new Dictionary<TriggerKind, Ellipse>();
+        private readonly HashSet<TriggerKind> dragging = new HashSet<TriggerKind>(), assigned = new HashSet<TriggerKind>();
         private readonly Func<string, bool> canBind;
         internal event Action<TriggerKind, string> Assign;
         internal MouseBindingMap(Func<string, bool> canBind)
@@ -49,30 +53,44 @@ namespace RazerBatteryTray.Desktop
             var line = new Polyline { Stroke = Ui.Border, StrokeThickness = 1.2, IsHitTestVisible = false };
             double start = right ? x : x + 180, elbow = right ? 426 : 213;
             line.Points = new PointCollection { new Point(start, y + 30), new Point(elbow, y + 30), new Point(elbow, py), new Point(px, py) }; scene.Children.Add(line);
+            lines[key] = line;
             var title = Ui.Text(DefaultName(key), 15); title.TextWrapping = TextWrapping.NoWrap; title.TextTrimming = TextTrimming.CharacterEllipsis; title.Margin = new Thickness(0, 0, 0, 4);
             var detail = Ui.Text(Ui.T("原始功能", "Original input"), 11, Ui.Muted); detail.Margin = new Thickness(0); detail.TextWrapping = TextWrapping.NoWrap; detail.TextTrimming = TextTrimming.CharacterEllipsis;
             var label = Ui.Button("", () => Request(key, null)); label.Content = Ui.Stack(title, detail); label.Width = 180; label.Height = 65; label.Margin = new Thickness(0); label.Padding = new Thickness(10, 7, 10, 7); label.HorizontalContentAlignment = HorizontalAlignment.Left;
             names[key] = title; details[key] = detail; labels[key] = label;
             Canvas.SetLeft(label, x); Canvas.SetTop(label, y); scene.Children.Add(label);
             var pin = Ui.Button("", () => Request(key, null)); pin.Width = pin.Height = 26; pin.Padding = new Thickness(0); pin.Margin = new Thickness(0); pin.Background = Ui.Brush("#141414");
-            pin.Content = new Ellipse { Width = 7, Height = 7, Fill = Ui.Accent }; pin.ToolTip = DefaultName(key);
+            var dot = new Ellipse { Width = 7, Height = 7, Fill = Ui.Muted }; pin.Content = dot; dots[key] = dot; pins[key] = pin; pin.ToolTip = DefaultName(key);
             Canvas.SetLeft(pin, px - 13); Canvas.SetTop(pin, py - 13); scene.Children.Add(pin);
             foreach (var target in new[] { label, pin }) {
+                target.MouseEnter += (s, e) => Highlight(key);
+                target.MouseLeave += (s, e) => Highlight(key);
+                target.GotKeyboardFocus += (s, e) => Highlight(key);
+                target.LostKeyboardFocus += (s, e) => Highlight(key);
                 target.AllowDrop = true;
                 target.DragOver += (s, e) => {
                     var id = e.Data.GetDataPresent(MacroFormat) ? e.Data.GetData(MacroFormat) as string : null;
                     bool valid = id != null && canBind(id); e.Effects = valid ? DragDropEffects.Link : DragDropEffects.None; e.Handled = true;
-                    label.BorderBrush = valid ? Ui.Accent : Ui.Border; label.BorderThickness = new Thickness(valid ? 2 : 1);
+                    if (valid) dragging.Add(key); else dragging.Remove(key); Highlight(key);
                 };
-                target.DragLeave += (s, e) => { label.BorderBrush = Ui.Border; label.BorderThickness = new Thickness(1); };
+                target.DragLeave += (s, e) => { dragging.Remove(key); Highlight(key); };
                 target.Drop += (s, e) => {
-                    label.BorderBrush = Ui.Border; label.BorderThickness = new Thickness(1);
+                    dragging.Remove(key); Highlight(key);
                     var id = e.Data.GetDataPresent(MacroFormat) ? e.Data.GetData(MacroFormat) as string : null;
                     e.Effects = id != null && canBind(id) ? DragDropEffects.Link : DragDropEffects.None; e.Handled = true;
                     if (e.Effects != DragDropEffects.None) Request(key, id);
                 };
                 System.Windows.Automation.AutomationProperties.SetName(target, DefaultName(key));
             }
+            Unloaded += (s, e) => { dragging.Remove(key); Highlight(key); };
+        }
+        private void Highlight(TriggerKind key)
+        {
+            bool hover = labels[key].IsMouseOver || pins[key].IsMouseOver || labels[key].IsKeyboardFocusWithin || pins[key].IsKeyboardFocusWithin || dragging.Contains(key);
+            lines[key].Stroke = hover ? Ui.Accent : Ui.Border; lines[key].StrokeThickness = hover ? 2 : 1.2;
+            labels[key].BorderBrush = pins[key].BorderBrush = hover ? Ui.Accent : Ui.Border;
+            labels[key].BorderThickness = pins[key].BorderThickness = new Thickness(dragging.Contains(key) ? 2 : 1);
+            dots[key].Fill = hover || assigned.Contains(key) ? Ui.Accent : Ui.Muted;
         }
         private void Request(TriggerKind key, string id) { var handler = Assign; if (handler != null) handler(key, id); }
         internal void Refresh(MacroLibrary active)
@@ -80,6 +98,7 @@ namespace RazerBatteryTray.Desktop
             foreach (var key in names.Keys) {
                 var binding = active.Bindings.Find(b => b.Trigger == key && b.Modifiers == KeyModifiers.None);
                 bool running = binding != null && binding.Enabled && active.BindingsEnabled;
+                if (running) assigned.Add(key); else assigned.Remove(key); Highlight(key);
                 var macro = binding == null ? null : active.Find(binding.MacroId);
                 names[key].Text = running && macro != null ? macro.Name : DefaultName(key);
                 names[key].Foreground = running ? Ui.Accent : Ui.Foreground;

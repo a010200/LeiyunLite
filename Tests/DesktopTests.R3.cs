@@ -118,7 +118,9 @@ namespace RazerBatteryTray.Desktop
             window.Width = 840; Pump(); Snapshot(window, "r3-macros-narrow.png");
             Check(Field<Button>(page, "newButton").Visibility == Visibility.Collapsed, "Narrow header moves New to More");
             var library = Field<ComboBox>(page, "library"); var record = Field<Button>(page, "recordButton");
-            Check(library.TranslatePoint(new Point(library.ActualWidth, 0), page).X < record.TranslatePoint(new Point(), page).X, "Narrow toolbar groups do not overlap");
+            var libraryBounds = new Rect(library.TranslatePoint(new Point(), page), new Size(library.ActualWidth, library.ActualHeight));
+            var recordBounds = new Rect(record.TranslatePoint(new Point(), page), new Size(record.ActualWidth, record.ActualHeight));
+            Check(!libraryBounds.IntersectsWith(recordBounds), "Responsive toolbar groups do not overlap horizontally or vertically");
             window.Width = 1180; Pump(); Invoke(page, "OpenRecording"); Pump(); Snapshot(window, "r3-recording-options.png"); window.CloseDrawer();
             var controller = new MacroController(new MacroStore(Path.Combine(artifacts, "ui-recording-missing.xml")), new RecordingOutput(), false);
             typeof(ShellWindow).GetField("Macros", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(window, controller);
@@ -139,7 +141,7 @@ namespace RazerBatteryTray.Desktop
             }
             finally { page.EndRecording(true); controller.Dispose(); typeof(ShellWindow).GetField("Macros", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(window, null); }
             window.Navigate(2); Pump();
-            var theme = Descendants<ComboBox>(Field<FrameworkElement[]>(window, "views")[2]).First(c => c.Items.Contains("白天"));
+            var theme = Descendants<ComboBox>(Field<FrameworkElement[]>(window, "views")[2]).First(c => c.Name == "ThemeSelector");
             Ui.ReducedMotion = false; theme.IsDropDownOpen = true; PumpFor(30);
             var popup = (Popup)theme.Template.FindName("PART_Popup", theme);
             var surface = Descendants<Border>(popup.Child).First(b => b.Name == "DropSurface");

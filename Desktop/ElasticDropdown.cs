@@ -51,8 +51,8 @@ namespace RazerBatteryTray.Desktop
                 {
                     surface.UpdateLayout();
                     bool above = PresentationSource.FromVisual(surface) != null && PresentationSource.FromVisual(combo) != null && surface.PointToScreen(new Point()).Y < combo.PointToScreen(new Point()).Y;
-                    move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(above ? 5 : -5, 0, TimeSpan.FromMilliseconds(200)) { EasingFunction = new BackEase { Amplitude = .18, EasingMode = EasingMode.EaseOut }, FillBehavior = FillBehavior.Stop }, HandoffBehavior.SnapshotAndReplace);
-                    surface.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(.35, 1, TimeSpan.FromMilliseconds(110)) { FillBehavior = FillBehavior.Stop }, HandoffBehavior.SnapshotAndReplace);
+                    UiMotion.To(move, TranslateTransform.YProperty, 0, UiMotion.Normal, above ? 5 : -5);
+                    UiMotion.Fade(surface, .35, UiMotion.Fast);
                 }
                 Arrow(combo, true);
         }
@@ -67,7 +67,7 @@ namespace RazerBatteryTray.Desktop
             var arrow = Find<FrameworkElement>(combo, "DropArrow"); if (arrow == null) return;
             var old = arrow.RenderTransform as RotateTransform; double from = old == null ? 0 : old.Angle;
             var rotate = new RotateTransform(open ? 180 : 0); arrow.RenderTransformOrigin = new Point(.5, .5); arrow.RenderTransform = rotate;
-            if (Ui.Motion) rotate.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(from, rotate.Angle, TimeSpan.FromMilliseconds(150)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }, FillBehavior = FillBehavior.Stop }, HandoffBehavior.SnapshotAndReplace);
+            UiMotion.To(rotate, RotateTransform.AngleProperty, rotate.Angle, UiMotion.Normal, from);
         }
     }
 }

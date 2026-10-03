@@ -189,8 +189,8 @@ namespace RazerBatteryTray.Desktop
             if (Ui.Motion && shell.Preferences.TrayAnimation)
             {
                 var move = new TranslateTransform(); surface.RenderTransform = move;
-                move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(7, 0, TimeSpan.FromMilliseconds(170)) { EasingFunction = new BackEase { Amplitude = 0.2, EasingMode = EasingMode.EaseOut }, FillBehavior = FillBehavior.Stop }, HandoffBehavior.SnapshotAndReplace);
-                surface.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)) { FillBehavior = FillBehavior.Stop });
+                UiMotion.To(move, TranslateTransform.YProperty, 0, UiMotion.Normal, 7);
+                UiMotion.Fade(surface, 0, UiMotion.Normal);
             }
         }
     }

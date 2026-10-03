@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "v1.2.5: Build",
+      "label": "v1.2.6: Build",
       "type": "process",
       "command": "powershell.exe",
       "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\Tools\\Build-VSCode.ps1"],
@@ -11,15 +11,15 @@
       "problemMatcher": "$msCompile"
     },
     {
-      "label": "v1.2.5: Safe preview",
+      "label": "v1.2.6: Safe preview",
       "type": "process",
-      "command": "${workspaceFolder}\\bin\\VSCode1.2.5\\LeiyunLite.Desktop.exe",
+      "command": "${workspaceFolder}\\bin\\VSCode1.2.6\\LeiyunLite.Desktop.exe",
       "args": ["--demo"],
-      "dependsOn": "v1.2.5: Build",
+      "dependsOn": "v1.2.6: Build",
       "problemMatcher": []
     },
     {
-      "label": "v1.2.5: Desktop tests (opens test windows)",
+      "label": "v1.2.6: Desktop tests (opens test windows)",
       "type": "process",
       "command": "powershell.exe",
       "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\build-desktop.ps1", "-Test", "-OutputDirectory", "bin\\VSCodeTests"],

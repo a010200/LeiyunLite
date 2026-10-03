@@ -13,7 +13,7 @@ namespace RazerBatteryTray.Desktop
         private static void VersionMetadata()
         {
             var assembly = typeof(AppVersion).Assembly;
-            Check(AppVersion.Number == "1.2.5" && ReleaseUpdateService.CurrentVersion == AppVersion.Number, "Version baseline");
+            Check(AppVersion.Number == "1.2.6" && ReleaseUpdateService.CurrentVersion == AppVersion.Number, "Version baseline");
             Check(assembly.GetName().Version.ToString() == AppVersion.AssemblyNumber, "Assembly version");
             var info = (AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(assembly, typeof(AssemblyInformationalVersionAttribute));
             var file = (AssemblyFileVersionAttribute)Attribute.GetCustomAttribute(assembly, typeof(AssemblyFileVersionAttribute));

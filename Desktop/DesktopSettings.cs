@@ -31,7 +31,8 @@ namespace RazerBatteryTray.Desktop
                 {
                 var result = (DesktopPreferences)new XmlSerializer(typeof(DesktopPreferences)).Deserialize(reader);
                 if (result == null) return new DesktopPreferences();
-                if (result.Theme != "light") result.Theme = "dark";
+                // Preserve valid legacy values until the user explicitly chooses a theme.
+                if (result.Theme != "light" && result.Theme != "dark" && result.Theme != "classic" && result.Theme != "fluent") result.Theme = "dark";
                 if (result.Language != "zh" && result.Language != "en") result.Language = "system";
                 if (result.LowBatteryThreshold != 10 && result.LowBatteryThreshold != 15 && result.LowBatteryThreshold != 20) result.LowBatteryThreshold = 20;
                 if (!result.AutoCheckUpdates) result.AutoDownloadUpdates = result.AutoInstallUpdates = false;

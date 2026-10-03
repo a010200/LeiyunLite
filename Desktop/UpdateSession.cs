@@ -7,23 +7,41 @@ using System.Windows.Threading;
 using RazerBatteryTray.Updates;
 namespace RazerBatteryTray.Desktop
 {
+    // UI orchestration seam. The production adapter delegates to the existing verification code.
+    internal interface IReleaseUpdateSource
+    {
+        Task<ReleaseOffer> Check(bool previews, CancellationToken token);
+        Task<string> Download(ReleaseOffer offer, IProgress<int> progress, CancellationToken token);
+        Task<string> DownloadSigned(ReleaseOffer offer, InstallLayout installation, IProgress<int> progress, CancellationToken token);
+    }
+    internal sealed class ReleaseUpdateSource : IReleaseUpdateSource
+    {
+        private readonly ReleaseUpdateService service = new ReleaseUpdateService();
+        public Task<ReleaseOffer> Check(bool previews, CancellationToken token) { return service.Check(previews, token); }
+        public Task<string> Download(ReleaseOffer offer, IProgress<int> progress, CancellationToken token) { return service.Download(offer, progress, token); }
+        public Task<string> DownloadSigned(ReleaseOffer offer, InstallLayout installation, IProgress<int> progress, CancellationToken token) { return service.DownloadSigned(offer, installation, progress, token); }
+    }
     internal sealed class UpdateSession : IDisposable
     {
         private readonly ShellWindow shell;
         private readonly DispatcherTimer timer;
         private CancellationTokenSource operation;
+        private CancellationTokenSource preparation;
+        private readonly IReleaseUpdateSource source;
+        private readonly bool testSource;
         private bool disposed, autoInstallFailed;
         private DateTime nextCheck = DateTime.UtcNow.AddSeconds(45);
         internal readonly InstallLayout Installation;
         internal ReleaseOffer Offer;
         internal string Downloaded, Job, Status = Ui.T("准备就绪", "Ready");
         internal int Progress;
-        internal bool Busy { get { return operation != null; } }
+        internal bool Busy { get { return operation != null || preparation != null; } }
         internal event Action Changed;
-        internal UpdateSession(ShellWindow shell)
+        internal UpdateSession(ShellWindow shell, IReleaseUpdateSource source = null, InstallLayout installation = null)
         {
             this.shell = shell;
-            Installation = shell.Demo ? null : InstallLayout.Detect(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            this.source = source ?? new ReleaseUpdateSource(); testSource = source != null;
+            Installation = installation ?? (shell.Demo ? null : InstallLayout.Detect(System.Reflection.Assembly.GetExecutingAssembly().Location));
             timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
             timer.Tick += async (s, e) => await Tick();
         }
@@ -33,7 +51,7 @@ namespace RazerBatteryTray.Desktop
         {
             shell.SaveUpdatePolicy(policy, value);
             if (policy == "check") nextCheck = DateTime.UtcNow.AddSeconds(45);
-            if (!value && operation != null) operation.Cancel();
+            if (!value) Cancel();
             autoInstallFailed = false; Notify();
         }
         internal async Task Tick()
@@ -47,10 +65,25 @@ namespace RazerBatteryTray.Desktop
         }
         internal async Task Check(bool manual)
         {
+            if (preparation != null) return;
+            await CheckCore(manual);
+        }
+        internal async Task CheckAndPrepareUpdate()
+        {
+            if (disposed || Busy) return;
+            preparation = new CancellationTokenSource(); Notify();
+            try {
+                await CheckCore(true);
+                if (!disposed && !preparation.IsCancellationRequested && Offer != null && Installation != null) await DownloadCore(true);
+            } finally { preparation.Dispose(); preparation = null; if (!disposed) Notify(); }
+        }
+        private async Task CheckCore(bool manual)
+        {
             if (!Begin()) return; Offer = null; Job = null; Downloaded = null; Progress = 0;
             Status = Ui.T("正在检查…", "Checking…"); Notify(); nextCheck = DateTime.UtcNow.AddHours(6);
             try {
-                Offer = await new ReleaseUpdateService().Check(shell.Preferences.IncludePrereleases, operation.Token);
+                var offer = await source.Check(shell.Preferences.IncludePrereleases, operation.Token);
+                operation.Token.ThrowIfCancellationRequested(); Offer = offer;
                 if (disposed) return;
                 Status = Offer == null ? Ui.T("当前已是最新兼容版本。", "No newer compatible version.") : Ui.T("发现新版本：", "New version: ") + Offer.Tag;
                 if (!manual && Offer != null) shell.Notice(Status);
@@ -60,17 +93,24 @@ namespace RazerBatteryTray.Desktop
         }
         internal async Task Download(bool manual)
         {
+            if (preparation != null) return;
+            await DownloadCore(manual);
+        }
+        private async Task DownloadCore(bool manual)
+        {
             var selected = Offer; if (selected == null || !Begin()) return;
             Downloaded = Job = null; Progress = 0; autoInstallFailed = false;
             Status = Ui.T("正在下载并验证…", "Downloading and verifying…"); Notify();
             try {
                 var progress = new Progress<int>(v => { Progress = v; Notify(); });
                 if (Installation != null && selected.SignedManifestUrl != null && !selected.Version.Preview) {
-                    Job = await new ReleaseUpdateService().DownloadSigned(selected, Installation, progress, operation.Token);
-                    Downloaded = Job; Status = Ui.T("签名与文件校验通过，可以安装并重启。", "Signature and file verification passed. Ready to install.");
+                    var job = await source.DownloadSigned(selected, Installation, progress, operation.Token);
+                    operation.Token.ThrowIfCancellationRequested(); if (disposed) return; Job = job;
+                    Downloaded = Job; Progress = 100; Status = selected.Tag + Ui.T(" 已准备好 · 签名与文件校验通过", " ready · signature and file verification passed");
                 } else {
                     if (!manual) { Status = Ui.T("此版本需手动下载或安装，未自动执行。", "Manual installation required; nothing executed."); return; }
-                    Downloaded = await new ReleaseUpdateService().Download(selected, progress, operation.Token);
+                    var downloaded = await source.Download(selected, progress, operation.Token);
+                    operation.Token.ThrowIfCancellationRequested(); if (disposed) return; Downloaded = downloaded; Progress = 100;
                     Status = Ui.T("便携 ZIP 已校验；请手动解压，或使用安装版。", "Portable ZIP verified; extract manually or use the installer.");
                 }
             } catch (OperationCanceledException) { Status = Ui.T("下载已取消或超时。", "Download cancelled or timed out."); }
@@ -94,9 +134,9 @@ namespace RazerBatteryTray.Desktop
             } catch (Exception ex) { autoInstallFailed = automatic; Status = Ui.T("无法开始安装：", "Cannot start installation: ") + ex.Message; Notify(); }
         }
         private static string Quote(string path) { if (path.Contains("\"") || path.EndsWith("\\")) throw new ArgumentException("Invalid path."); return "\"" + path + "\""; }
-        private bool Begin() { if (disposed || Busy) return false; if (shell.Demo) { Status = Ui.T("演示模式不联网、不安装。", "Demo mode does not connect or install."); Notify(); return false; } operation = new CancellationTokenSource(TimeSpan.FromMinutes(5)); return true; }
+        private bool Begin() { if (disposed || operation != null) return false; if (shell.Demo && !testSource) { Status = Ui.T("演示模式不联网、不安装。", "Demo mode does not connect or install."); Notify(); return false; } operation = preparation == null ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(preparation.Token); operation.CancelAfter(TimeSpan.FromMinutes(5)); return true; }
         private void End() { operation.Dispose(); operation = null; if (!disposed) Notify(); }
-        internal void Cancel() { if (operation != null) operation.Cancel(); }
-        public void Dispose() { disposed = true; timer.Stop(); if (operation != null) operation.Cancel(); Changed = null; }
+        internal void Cancel() { if (preparation != null) preparation.Cancel(); if (operation != null) operation.Cancel(); }
+        public void Dispose() { disposed = true; timer.Stop(); Cancel(); Changed = null; }
     }
 }

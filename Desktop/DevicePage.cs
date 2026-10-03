@@ -69,14 +69,22 @@ namespace RazerBatteryTray.Desktop
             Grid.SetColumn(battery, 1); battery.Margin = new Thickness(24, 0, 0, 0); battery.VerticalAlignment = VerticalAlignment.Center; hero.Children.Add(battery);
             var performance = Ui.Card(Ui.Stack(Ui.Text(Ui.T("灵敏度与回报率", "Sensitivity and polling"), 20), Ui.Text("DPI", 13, Ui.Muted), bubble, dpi,
                     Ui.Text(Ui.T("拖动后松手应用 · 输入数值后按 Enter · Esc 撤销输入", "Release to apply · Enter to apply a typed value · Esc to revert"), 12, Ui.Muted),
-                    Ui.Text(Ui.T("回报率", "Polling rate"), 14), ratePanel, performanceInfo,
-                    Ui.Text(Ui.T("回报率越高，CPU 占用和耗电通常越高。所列档位依据当前识别的连接类型。", "Higher polling rates generally increase CPU use and power consumption. Available rates depend on the identified connection."), 12, Ui.Muted)));
+                    Ui.Text(Ui.T("回报率", "Polling rate"), 14), ratePanel, performanceInfo));
             var rotation = Ui.Card(Ui.Stack(Ui.Row(Ui.Text(Ui.T("旋转校正", "Rotation correction"), 20), Ui.Text(Ui.T("  设备读回与预览", "  Device readback and preview"), 12, Ui.Muted)),
                     Ui.Text(Ui.T("拖动仅预览，点击应用才写入鼠标；设置结果通过设备读回确认。", "Drag to preview; click Apply to write to the mouse. The result is confirmed by device readback."), 13, Ui.Muted), mouse, angleValue, angle, range,
                     Ui.Row(Ui.Button(Ui.T("校准向导", "Calibrate"), OpenCalibration), Ui.Button(Ui.T("撤销预览", "Undo preview"), RestoreRotationPreview), applyRotation), rotationInfo));
             var tuning = new Grid(); tuning.ColumnDefinitions.Add(new ColumnDefinition()); tuning.ColumnDefinitions.Add(new ColumnDefinition());
+            tuning.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); tuning.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            performance.VerticalAlignment = VerticalAlignment.Top;
             performance.Margin = new Thickness(0, 0, 12, 16); rotation.Margin = new Thickness(0, 0, 0, 16); Grid.SetColumn(rotation, 1); tuning.Children.Add(performance); tuning.Children.Add(rotation);
             Content = Ui.Scroll(Ui.Stack(Ui.Text(Ui.T("你的设备", "Your device"), 32), Ui.Card(hero), tuning));
+            SizeChanged += (s, e) => {
+                bool wide = ResponsiveLayout.ForWidth(shell.ActualWidth > 0 ? shell.ActualWidth : shell.Width) == LayoutMode.Wide;
+                tuning.ColumnDefinitions[1].Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+                Grid.SetColumn(rotation, wide ? 1 : 0); Grid.SetRow(rotation, wide ? 0 : 1);
+                performance.Margin = new Thickness(0, 0, wide ? 12 : 0, 16);
+                battery.FontSize = wide ? 52 : 40; name.FontSize = wide ? 23 : 20;
+            };
         }
         private void PositionBubble()
         {
@@ -112,9 +120,8 @@ namespace RazerBatteryTray.Desktop
                 int chosen = rate; var button = Ui.Button(rate + " Hz", async () => await CommitRate(chosen), rate == r.PollingRate && !r.IsSleeping);
                 button.Padding = new Thickness(12, 8, 12, 8); button.IsEnabled = r.IsWriteSupported && !writing; ratePanel.Children.Add(button);
             }
-            performanceInfo.Text = !cap.Known ? Ui.T("尚无此设备 / 接收器组合的可靠能力表，暂不开放写入。", "No verified capability profile for this device / receiver; writes are disabled.") :
-                Ui.T("只改当前 DPI 档位，保留其他档位。", "Edits the active DPI stage; preserves other stages.") + "  " + (r.PollingRate > 0 && !r.IsSleeping ? Ui.T("读回：", "Readback: ") + r.PollingRate + " Hz" : Ui.T("回报率读回未知", "Polling readback unknown"));
-            if (cap.Known) performanceInfo.Text += Ui.T(" · 实验性兼容，尚未完成写入实机验收", " · Experimental compatibility; hardware write acceptance pending");
+            performanceInfo.Text = cap.Known ? "" : Ui.T("尚无此设备 / 接收器组合的可靠能力表，暂不开放写入。", "No verified capability profile for this device / receiver; writes are disabled.");
+            performanceInfo.Visibility = cap.Known ? Visibility.Collapsed : Visibility.Visible;
             if (!pendingRotation && !writing && !angle.IsMouseCaptureWithin && !angleValue.IsKeyboardFocusWithin && r.RotationKnown) {
                 updatingRotation = true; angle.Value = r.RotationAngle; angleValue.Text = r.RotationAngle.ToString(CultureInfo.InvariantCulture); updatingRotation = false;
                 rotationEditKey = r.DeviceKey;

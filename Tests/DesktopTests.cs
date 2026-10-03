@@ -118,7 +118,7 @@ namespace RazerBatteryTray.Desktop
         }
         private static void MacroUi(ShellWindow window)
         {
-            window.Navigate(1); var page = Field<MacroPage>(window, "macroPage"); page.Width = 760; window.UpdateLayout(); Pump(); Invoke(page, "NewMacro"); Invoke(page, "NewMacro");
+            window.Width = 960; window.Navigate(1); var page = Field<MacroPage>(window, "macroPage"); window.UpdateLayout(); Pump(); Invoke(page, "NewMacro"); Invoke(page, "NewMacro");
             var m = page.Selected; m.Steps.Add(new MacroStep { Kind = ActionKind.Delay, Number = 100 }); page.RefreshRows();
             var selectedId = m.Id;
             window.Navigate(0); window.Navigate(1); Check(page.Selected.Id == selectedId, "Selection survives navigation");
@@ -206,9 +206,9 @@ namespace RazerBatteryTray.Desktop
             Check(move.X == 18 && !move.HasAnimatedProperties, "Reduced motion settles interrupted toggle immediately: X=" + move.X + ", animated=" + move.HasAnimatedProperties + ", checked=" + toggle.IsChecked);
             var failToggle = Ui.Toggle("Failure test", false, b => { throw new IOException("simulated"); }); failToggle.IsChecked = true; failToggle.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent)); Check(failToggle.IsChecked == false, "Failed setting rolls back toggle");
             var foreground = (SolidColorBrush)Ui.Foreground;
-            var themeCombo = Descendants<ComboBox>(settings).First(c => c.Items.Contains("白天")); themeCombo.SelectedIndex = 1; Pump();
-            Check(window.Preferences.Theme == "light", "Theme selector updates model");
-            Check(foreground.Color == (Color)ColorConverter.ConvertFromString("#1B1B1B"), "Theme updates existing brushes without rebuilding drafts");
+            var themeCombo = Descendants<ComboBox>(settings).First(c => c.Name == "ThemeSelector"); themeCombo.SelectedIndex = 1; Pump();
+            Check(window.Preferences.Theme == "fluent", "Theme selector updates model");
+            Check(foreground.Color == ThemeTokens.ColorFor("TextPrimary", "fluent"), "Theme updates existing brushes without rebuilding drafts");
             window.Navigate(0); Pump(); Snapshot(window, "r2-device-light.png");
             window.Navigate(2); Pump(); Snapshot(window, "r2-settings-light.png");
             window.Navigate(1); Invoke(page, "SelectTab", false); steps.SelectedIndex = 0; Invoke(page, "EditStep", true); Pump(); Snapshot(window, "r2-macros-light.png"); Invoke(page, "CloseStepEditor");

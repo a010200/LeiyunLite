@@ -158,13 +158,17 @@ namespace RazerBatteryTray.Desktop
             Descendants<ComboBox>(overlay).Last().SelectedIndex = 0;
             Descendants<Button>(overlay).First(b => (b.Content as string ?? "").StartsWith("确认")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.DrawerOpen && !window.ActiveMacros.Bindings.Any(b => b.Trigger == TriggerKind.Left), "Left replacement requires explicit risk acknowledgment"); window.CloseDrawer();
-            window.Width = 840; Pump();
+            window.Width = 760; Pump(); // Compact is based on window DIP (<820), not page width.
+            var shelf = Field<Expander>(page, "compactShelf");
+            Check(!shelf.IsExpanded, "Compact shelf starts folded so the mouse model remains primary");
+            shelf.IsExpanded = true; Pump();
             Check(Field<ListBox>(page, "mappingLibrary").ActualHeight >= 80, "Narrow library remains usable and scrollable");
             Snapshot(window, "r4-bindings-narrow.png");
-            var mappingScroll = Descendants<ScrollViewer>(page).First(s => s.ScrollableHeight > 200 && s.ActualWidth > 400);
-            mappingScroll.ScrollToEnd(); Pump(); Snapshot(window, "r4-bindings-narrow-bottom.png");
+            var mappingScroll = (ScrollViewer)Field<FrameworkElement>(page, "bindingWorkspace");
+            Check(mappingScroll.ScrollableHeight > 0 && mappingScroll.ActualWidth > 400, "Expanded compact library and model can be scrolled");
+            mappingScroll.ScrollToEnd(); Pump(); Check(Math.Abs(mappingScroll.VerticalOffset - mappingScroll.ScrollableHeight) < 1, "Mouse model bottom remains reachable"); Snapshot(window, "r4-bindings-narrow-bottom.png");
             window.Width = 1180; window.Preferences.Theme = "light"; Ui.ApplyTheme("light"); window.RebuildPages(1); page = Field<MacroPage>(window, "macroPage"); Invoke(page, "SelectTab", true); Pump();
-            Check(Ui.Light && ((System.Windows.Media.SolidColorBrush)Ui.Foreground).Color == (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1B1B1B"), "Light binding view uses the active light palette");
+            Check(Ui.Light && ((System.Windows.Media.SolidColorBrush)Ui.Foreground).Color == ThemeTokens.ColorFor("TextPrimary", "fluent"), "Legacy light binding view maps to the Fluent palette");
             Snapshot(window, "r4-bindings-light.png");
             window.Preferences.Theme = "dark"; Ui.ApplyTheme("dark"); window.RebuildPages(0); Pump();
             var flyout = new TrayFlyout(window, false, false, b => { }); flyout.ShowActivated = false; flyout.Show(); Pump();

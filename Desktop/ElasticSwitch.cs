@@ -53,8 +53,7 @@ namespace RazerBatteryTray.Desktop
         {
             var scale = Part<ScaleTransform>(c, "DotScale"); if (scale == null || !c.IsEnabled) return;
             double from = scale.ScaleX, to = down && Ui.Motion ? 1.12 : 1;
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, null); scale.ScaleX = to;
-            if (Ui.Motion) scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(from, to, TimeSpan.FromMilliseconds(90)) { FillBehavior = FillBehavior.Stop }, HandoffBehavior.SnapshotAndReplace);
+            UiMotion.To(scale, ScaleTransform.ScaleXProperty, to, UiMotion.Fast, from);
         }
         private static void Update(CheckBox c, bool animate)
         {
@@ -62,18 +61,12 @@ namespace RazerBatteryTray.Desktop
             if (move == null || track == null || dot == null) return;
             bool on = c.IsChecked == true; double from = move.X, target = on ? 18 : 0;
             var old = track.Background as SolidColorBrush; Color initial = old == null ? Colors.Gray : old.Color;
-            Color final = ((SolidColorBrush)(on ? Ui.Accent : Ui.Brush("#444444"))).Color;
+            Color final = ((SolidColorBrush)(on ? Ui.Accent : Ui.Brush("ToggleOff"))).Color;
             move.BeginAnimation(TranslateTransform.XProperty, null); move.X = target;
-            var fill = new SolidColorBrush(final); track.Background = fill; dot.Fill = on ? Ui.Ink : Brushes.WhiteSmoke;
+            var fill = new SolidColorBrush(final); track.Background = fill; dot.Fill = on ? Ui.Ink : Ui.Brush("ToggleThumb");
             if (!animate || !Ui.Motion || !c.IsLoaded || !c.IsVisible) { Press(c, false); return; }
-            // Reach the end, recoil by less than a pixel, settle. Never leave the track.
-            var motion = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(210), FillBehavior = FillBehavior.Stop };
-            motion.KeyFrames.Add(new LinearDoubleKeyFrame(from, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-            motion.KeyFrames.Add(new EasingDoubleKeyFrame(target, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(145)), new CubicEase { EasingMode = EasingMode.EaseOut }));
-            motion.KeyFrames.Add(new EasingDoubleKeyFrame(on ? 17.2 : 0.8, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(175)), new SineEase { EasingMode = EasingMode.EaseInOut }));
-            motion.KeyFrames.Add(new EasingDoubleKeyFrame(target, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(210)), new SineEase { EasingMode = EasingMode.EaseOut }));
-            move.BeginAnimation(TranslateTransform.XProperty, motion, HandoffBehavior.SnapshotAndReplace);
-            fill.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(initial, final, TimeSpan.FromMilliseconds(140)) { FillBehavior = FillBehavior.Stop }, HandoffBehavior.SnapshotAndReplace);
+            UiMotion.To(move, TranslateTransform.XProperty, target, UiMotion.Normal, from);
+            UiMotion.ColorTo(fill, initial, final);
         }
     }
 }

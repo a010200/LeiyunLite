@@ -59,6 +59,7 @@ namespace RazerBatteryTray.Desktop
             recordingTarget = append ? Selected : new MacroDefinition { Name = Ui.T("录制宏 ", "Recorded macro ") + (shell.Draft.Macros.Count + 1) };
             appendRecording = append; recordingDelay = delay; recordingFixedDelay = fixedDelay; recordingCapacity = 500 - recordingTarget.Steps.Count;
             recording = countingDown = true; recordingClock.Restart(); recordingTimer.Start(); TickRecording();
+            UpdateDirty();
             renderedCount = -1; recordedActions.Items.Clear();
         }
         private void TickRecording()
@@ -90,10 +91,11 @@ namespace RazerBatteryTray.Desktop
                 recordingTarget.Steps.AddRange(result);
                 if (!appendRecording) shell.Draft.Macros.Add(recordingTarget);
                 shell.DraftDirty = true; ReloadLibrary(recordingTarget.Id);
-                shell.Notice(Ui.T("录制已加入未保存草稿。", "Recording added to the unsaved draft.") + (reason == "limit" || reason == "overflow" ? Ui.T(" 已达到录制上限，自动停止。", " Recording limit reached; stopped automatically.") : ""));
+                UiMotion.PulseOnce(saveBar);
+                shell.Notice(Ui.T("录制已加入宏，请保存修改。", "Recording added; save your changes.") + (reason == "limit" || reason == "overflow" ? Ui.T(" 已达到录制上限，自动停止。", " Recording limit reached; stopped automatically.") : ""));
             }
             else shell.Notice(!cancel && !wasCountdown && result.Count == 0 ? Ui.T("未录到输入；请在录制区域操作，或选择外部应用模式。原有宏未改变。", "No input captured. Use the recording area or choose external mode; existing macros unchanged.") : Ui.T("录制结束，原有宏未改变。", "Recording ended; existing macros unchanged."));
-            recordingTarget = null; UpdateRecordingControls();
+            recordingTarget = null; UpdateDirty();
         }
         private void UpdateRecordingControls()
         {

@@ -29,18 +29,22 @@ namespace RazerBatteryTray.Desktop
         private readonly DesktopSettings store;
         private readonly AutoStartService autoStart;
         private readonly Grid pages = new Grid(), overlay = new Grid();
+        private Grid body;
+        internal LayoutMode Layout { get; private set; }
+        internal event Action LayoutChanged;
         private readonly Button[] navigation = new Button[4];
         private readonly FrameworkElement[] views = new FrameworkElement[4];
-        private readonly TextBlock toast = Ui.Text("");
+        private readonly UiSnackbar toast = new UiSnackbar();
         private DevicePage devicePage;
         private MacroPage macroPage;
         private UpdatePage updatePage;
         private TrayController tray;
         private DpiMonitor monitor;
-        private readonly DispatcherTimer refreshTimer = new DispatcherTimer(), toastTimer = new DispatcherTimer();
+        private readonly DispatcherTimer refreshTimer = new DispatcherTimer();
         private int currentPage = -1;
         private bool refreshing, exiting, disposed, discardApproved, runtimeInitialized;
         private FrameworkElement previousFocus;
+        private Func<LayoutMode, double> drawerPreferredWidth;
         internal bool StartHidden { get; private set; }
         internal bool DrawerOpen { get { return overlay.Visibility == Visibility.Visible; } }
         internal event Action Refreshed;
@@ -71,7 +75,7 @@ namespace RazerBatteryTray.Desktop
             Title = AppVersion.DisplayName;
             using (var icon = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Lite.png"))
             { if (icon != null) { var bitmap = System.Windows.Media.Imaging.BitmapFrame.Create(icon, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad); bitmap.Freeze(); Icon = bitmap; } }
-            Width = 1180; Height = 840; MinWidth = 840; MinHeight = 640;
+            Width = 1180; Height = 840; MinWidth = 700; MinHeight = 560;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Ui.Frame; Foreground = Ui.Foreground; FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI");
             WindowStyle = WindowStyle.None;
@@ -79,16 +83,20 @@ namespace RazerBatteryTray.Desktop
             Build();
             refreshTimer.Interval = TimeSpan.FromMilliseconds(LegacySettings.RefreshInterval);
             refreshTimer.Tick += async (s, e) => await RefreshDevice();
-            toastTimer.Interval = TimeSpan.FromSeconds(8);
-            toastTimer.Tick += (s, e) => { toast.Text = ""; toastTimer.Stop(); };
             SourceInitialized += (s, e) => {
                 HwndSource.FromHwnd(new WindowInteropHelper(this).Handle).AddHook((IntPtr hwnd, int msg, IntPtr w, IntPtr l, ref bool handled) => {
+                    IntPtr captionResult = ChromeMessage(hwnd, msg, w, l, ref handled);
+                    if (handled) return captionResult;
                     if (msg == 0x0219 && !Demo && !disposed) { Device.InvalidateTarget(); Dispatcher.BeginInvoke(new Action(async () => await RefreshDevice())); }
                     return IntPtr.Zero;
                 });
             };
             Closing += OnClosing;
+            SizeChanged += (s, e) => ApplyLayout();
             Closed += (s, e) => DisposeServices();
+            CommandBindings.Add(new CommandBinding(ApplicationCommands.Save,
+                (s, e) => { if (macroPage != null) macroPage.SaveDraft(); e.Handled = true; },
+                (s, e) => { e.CanExecute = currentPage == 1 && macroPage != null && !macroPage.IsBindingsTab && !macroPage.IsRecording; e.Handled = true; }));
             PreviewKeyDown += (s, e) => {
                 if (e.Key == Key.Escape && DrawerOpen) { CloseDrawer(); e.Handled = true; }
                 if (e.Key == Key.F12 && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift)) { if (Macros != null) Macros.Stop(); e.Handled = true; }
@@ -122,7 +130,7 @@ namespace RazerBatteryTray.Desktop
             var caption = new DockPanel { LastChildFill = true, Background = Ui.Frame };
             var actions = new StackPanel { Orientation = Orientation.Horizontal };
             var min = CaptionButton("min", () => WindowState = WindowState.Minimized);
-            var max = CaptionButton("max", () => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized);
+            var max = CaptionButton("max", MaximizeOrRestore); maximizeButton = max; max.Name = "MaximizeCaption";
             StateChanged += (s, e) => max.Content = CaptionGlyph(WindowState == WindowState.Maximized ? "restore" : "max");
             var close = CaptionButton("close", Close);
             foreach (var b in new[] { min, max, close }) { b.Margin = new Thickness(0); b.Width = 46; b.Padding = new Thickness(0); b.Background = Ui.Frame; b.BorderThickness = new Thickness(0); WindowChrome.SetIsHitTestVisibleInChrome(b, true); actions.Children.Add(b); }
@@ -130,38 +138,53 @@ namespace RazerBatteryTray.Desktop
             var brandIcon = new Image { Source = Icon, Width = 18, Height = 18, Margin = new Thickness(18, 0, 0, 0) }; DockPanel.SetDock(brandIcon, Dock.Left); caption.Children.Add(brandIcon);
             var title = Ui.Text("雷云lite     /     v" + AppVersion.Number + (Demo ? "  ·  " + Ui.T("安全预览 · 不操作硬件", "Safe preview · no hardware access") : ""), 12, Ui.Muted); title.Margin = new Thickness(10, 13, 0, 0); caption.Children.Add(title);
             root.Children.Add(caption);
-            var body = new Grid(); body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(176) }); body.ColumnDefinitions.Add(new ColumnDefinition()); Grid.SetRow(body, 1); root.Children.Add(body);
+            body = new Grid(); body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(176) }); body.ColumnDefinitions.Add(new ColumnDefinition()); Grid.SetRow(body, 1); root.Children.Add(body);
             var rail = new DockPanel { Margin = new Thickness(10, 18, 10, 12) };
             var bottom = new StackPanel(); DockPanel.SetDock(bottom, Dock.Bottom); rail.Children.Add(bottom);
             var top = new StackPanel(); rail.Children.Add(top);
-            var brand = Ui.Text("LEIYUN / LITE", 12, Ui.Muted); brand.Margin = new Thickness(14, 0, 0, 24); top.Children.Add(brand);
-            string[] names = { Ui.T("设备", "Device"), Ui.T("宏与绑定", "Macros"), Ui.T("设置", "Settings"), Ui.T("自动更新", "Updates") };
-            string[] glyphs = { "◉", "⌘", "⚙", "↓" };
-            for (int i = 0; i < 4; i++) { int n = i; var b = Ui.Button(glyphs[i] + "    " + names[i], () => Navigate(n)); b.HorizontalContentAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 0, 0, 8); b.Padding = new Thickness(12, 14, 12, 14); b.BorderThickness = new Thickness(0); navigation[i] = b; (i < 2 ? top : bottom).Children.Add(b); }
-            body.Children.Add(rail);
+            for (int i = 0; i < 4; i++) { int n = i; var b = Ui.Button("", () => Navigate(n)); b.Content = CreateNavigationContent(i, false); b.HorizontalContentAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 0, 0, 8); b.Padding = new Thickness(12, 14, 12, 14); b.BorderThickness = new Thickness(0); navigation[i] = b; (i < 2 ? top : bottom).Children.Add(b); }
+            body.Children.Add(new Border { Background = Ui.Brush("NavigationBackground"), Child = rail });
             var content = new Grid { Background = Ui.Background }; Grid.SetColumn(content, 1); body.Children.Add(content);
             content.RowDefinitions.Add(new RowDefinition()); content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             pages.Margin = new Thickness(30, 22, 18, 12); content.Children.Add(pages);
-            toast.Margin = new Thickness(30, 0, 30, 12); toast.Foreground = Ui.Foreground; Grid.SetRow(toast, 1); content.Children.Add(toast);
-            overlay.Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)); overlay.Visibility = Visibility.Collapsed;
+            toast.Margin = new Thickness(30, 8, 30, 12); Grid.SetRow(toast, 1); content.Children.Add(toast);
+            overlay.Background = Ui.Brush("Overlay"); overlay.Visibility = Visibility.Collapsed;
+            // Navigation width settles during measure; clamp drawers again to the measured content area.
+            overlay.SizeChanged += (s, e) => { foreach (FrameworkElement drawer in overlay.Children) drawer.Width = DrawerWidth(); };
             Grid.SetRowSpan(overlay, 2); content.Children.Add(overlay);
             Content = root;
             RebuildPages(0);
+            ApplyLayout();
+        }
+        private void ApplyLayout()
+        {
+            if (body == null) return;
+            Layout = ResponsiveLayout.ForWidth(ActualWidth > 0 ? ActualWidth : Width);
+            body.ColumnDefinitions[0].Width = new GridLength(ResponsiveLayout.NavigationWidth(Layout));
+            double inset = ResponsiveLayout.PageInset(Layout); pages.Margin = new Thickness(inset, 22, 18, 12); toast.Margin = new Thickness(inset, 8, 18, 12);
+            for (int i = 0; i < navigation.Length; i++) if (navigation[i] != null) {
+                navigation[i].Content = CreateNavigationContent(i, Layout == LayoutMode.Compact);
+                navigation[i].ToolTip = NavigationName(i); navigation[i].HorizontalContentAlignment = Layout == LayoutMode.Compact ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+                navigation[i].Padding = new Thickness(Layout == LayoutMode.Compact ? 8 : 12, 14, 8, 14);
+            }
+            foreach (FrameworkElement drawer in overlay.Children) drawer.Width = DrawerWidth();
+            if (LayoutChanged != null) LayoutChanged();
         }
         internal void RebuildPages(int destination)
         {
             string selectedMacro = macroPage == null || macroPage.Selected == null ? null : macroPage.Selected.Id;
             bool bindingsTab = macroPage != null && macroPage.IsBindingsTab;
+            int selectedStep = macroPage == null ? -1 : macroPage.SelectedStepIndex;
             if (updatePage != null) updatePage.Dispose();
             if (macroPage != null) macroPage.DisposeRecording();
             ApplyLanguage(); pages.Children.Clear();
             devicePage = new DevicePage(this); macroPage = new MacroPage(this);
             macroPage.RestoreWorkspace(selectedMacro, bindingsTab);
+            macroPage.RestoreStep(selectedStep);
             views[0] = devicePage; views[1] = macroPage; views[2] = BuildSettings(); views[3] = BuildUpdates();
             foreach (var v in views) { v.Visibility = Visibility.Collapsed; pages.Children.Add(v); }
-            string[] names = { "◉    " + Ui.T("设备", "Device"), "⌘    " + Ui.T("宏与绑定", "Macros"), "⚙    " + Ui.T("设置", "Settings"), "↓    " + Ui.T("自动更新", "Updates") };
-            for (int i = 0; i < 4; i++) navigation[i].Content = names[i];
             currentPage = -1; Navigate(destination); devicePage.UpdateReading();
+            ApplyLayout();
         }
         internal void Navigate(int index)
         {
@@ -169,21 +192,38 @@ namespace RazerBatteryTray.Desktop
             if (index == currentPage) return;
             // Do not discard an unfinished drawer when switching pages.
             if (DrawerOpen) { Notice(Ui.T("请先完成或取消当前编辑。", "Finish or cancel the current edit first.")); return; }
-            for (int i = 0; i < 4; i++) { Ui.Stop(views[i]); views[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed; navigation[i].Background = i == index ? Ui.Brush("#253A21") : Ui.Frame; navigation[i].Foreground = Ui.Foreground; navigation[i].BorderBrush = Ui.Accent; navigation[i].BorderThickness = new Thickness(i == index ? 2 : 0, 0, 0, 0); }
+            for (int i = 0; i < 4; i++) { Ui.Stop(views[i]); views[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed; navigation[i].Background = i == index ? Ui.Brush("SelectionBackground") : Ui.Brush("NavigationBackground"); navigation[i].Foreground = Ui.Foreground; navigation[i].BorderBrush = Ui.Brush("SelectionIndicator"); navigation[i].BorderThickness = new Thickness(i == index ? 2 : 0, 0, 0, 0); }
             currentPage = index; Ui.Enter(views[index]);
         }
-        internal void OpenDrawer(string title, UIElement content)
+        private static string NavigationName(int index)
+        {
+            return index == 0 ? Ui.T("设备", "Device") : index == 1 ? Ui.T("宏与绑定", "Macros") : index == 2 ? Ui.T("设置", "Settings") : Ui.T("自动更新", "Updates");
+        }
+        private static StackPanel CreateNavigationContent(int index, bool compact)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            row.Children.Add(index == 0 ? UiIcons.Device() : index == 1 ? UiIcons.Macros() : index == 2 ? UiIcons.Settings() : UiIcons.Update());
+            if (!compact) row.Children.Add(new TextBlock { Text = NavigationName(index), Margin = new Thickness(11, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            return row;
+        }
+        private double DrawerWidth()
+        {
+            double available = overlay.ActualWidth > 0 ? overlay.ActualWidth : Math.Max(0, Width - ResponsiveLayout.NavigationWidth(Layout));
+            return Math.Min(available, drawerPreferredWidth == null ? 390 : Math.Max(0, drawerPreferredWidth(Layout)));
+        }
+        internal void OpenDrawer(string title, UIElement content, Func<LayoutMode, double> preferredWidth = null)
         {
             previousFocus = Keyboard.FocusedElement as FrameworkElement;
+            drawerPreferredWidth = preferredWidth;
             overlay.Children.Clear();
             var panel = Ui.Stack(Ui.Row(Ui.Text(title, 24), Ui.Button("×", CloseDrawer)), content);
-            var drawer = new Border { Width = 390, Background = Ui.Background, BorderBrush = Ui.Brush("#353535"), BorderThickness = new Thickness(1, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(24), Child = Ui.Scroll(panel) };
+            var drawer = new Border { Width = DrawerWidth(), Background = Ui.Background, BorderBrush = Ui.Border, BorderThickness = new Thickness(1, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(24), Child = Ui.Scroll(panel) };
             overlay.Children.Add(drawer); overlay.Visibility = Visibility.Visible; Ui.Enter(drawer, true);
             KeyboardNavigation.SetTabNavigation(drawer, KeyboardNavigationMode.Cycle);
             drawer.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
         }
         internal void CloseDrawer() { foreach (FrameworkElement c in overlay.Children) Ui.Stop(c); overlay.Visibility = Visibility.Collapsed; overlay.Children.Clear(); if (macroPage != null) macroPage.DrawerClosed(); if (previousFocus != null) previousFocus.Focus(); }
-        internal void Notice(string message) { toast.Text = message; toastTimer.Stop(); toastTimer.Start(); }
+        internal void Notice(string message) { toast.Show(message); }
         internal async Task RefreshDevice()
         {
             if (refreshing || disposed) return; refreshing = true;
@@ -204,16 +244,17 @@ namespace RazerBatteryTray.Desktop
             devicePage.UpdateDpi();
             if (Refreshed != null) Refreshed();
         }
-        internal void SaveMacros()
+        internal bool SaveMacros()
         {
-            if (macroPage != null && !macroPage.CommitPending()) return;
+            if (macroPage != null && (macroPage.IsRecording || !macroPage.CommitPending())) return false;
             try {
                 SyncBindingDraft(); MacroValidation.Validate(Draft);
                 if (!Demo) Macros.SaveDefinitions(Draft); else demoActive = Draft.Clone();
                 DraftDirty = false; if (macroPage != null) macroPage.RefreshRows();
                 Notice(Demo ? Ui.T("预览模式：草稿仅保留在内存。", "Preview: draft remains in memory only.") : Ui.T("宏已保存；已生效绑定保持同步。", "Macros saved; active bindings kept in sync."));
+                return true;
             }
-            catch (Exception ex) { Notice(ex.Message); }
+            catch (Exception ex) { if (macroPage != null) macroPage.SaveFailed(); Notice(ex.Message); return false; }
         }
         private void SetupTray() { tray = new TrayController(this); }
         internal void Restore() { Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
@@ -228,7 +269,7 @@ namespace RazerBatteryTray.Desktop
             {
                 e.Cancel = true;
                 if (!IsVisible) Dispatcher.BeginInvoke(new Action(Restore));
-                OpenDrawer(Ui.T("未保存的宏草稿", "Unsaved macro draft"), Ui.Stack(Ui.Text(Ui.T("退出会丢弃这次未保存的修改。", "Exiting will discard your unsaved changes.")), Ui.Button(Ui.T("保存后退出", "Save and exit"), () => { SaveMacros(); if (!DraftDirty) { exiting = true; Close(); } }, true), Ui.Button(Ui.T("放弃修改并退出", "Discard and exit"), () => { exiting = true; discardApproved = true; Close(); }), Ui.Button(Ui.T("继续编辑", "Keep editing"), () => { exiting = false; CloseDrawer(); })));
+                OpenDrawer(Ui.T("未保存的宏草稿", "Unsaved macro draft"), Ui.Stack(Ui.Text(Ui.T("退出会丢弃这次未保存的修改。", "Exiting will discard your unsaved changes.")), Ui.Button(Ui.T("保存后退出", "Save and exit"), () => { if (SaveMacros()) { exiting = true; Close(); } }, true), Ui.Button(Ui.T("放弃修改并退出", "Discard and exit"), () => { exiting = true; discardApproved = true; Close(); }), Ui.Button(Ui.T("继续编辑", "Keep editing"), () => { exiting = false; CloseDrawer(); })));
             }
         }
         internal void ClosePreview() { if (!Demo) throw new InvalidOperationException(); discardApproved = true; exiting = true; Close(); }
@@ -237,7 +278,7 @@ namespace RazerBatteryTray.Desktop
             if (Updates != null) Updates.Dispose();
             if (updatePage != null) updatePage.Dispose();
             if (macroPage != null) macroPage.DisposeRecording();
-            disposed = true; refreshTimer.Stop(); toastTimer.Stop();
+            disposed = true; refreshTimer.Stop(); toast.Clear();
             if (monitor != null) monitor.Dispose(); if (Macros != null) Macros.Dispose();
             if (tray != null) tray.Dispose();
         }

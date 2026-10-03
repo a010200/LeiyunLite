@@ -14,6 +14,7 @@ namespace RazerBatteryTray.Desktop
     {
         internal static string TrialToken;
         internal static bool UpdateHidden;
+        internal static bool Diagnostics;
         internal static void LoadTheme(Application app)
         {
             Ui.InstallResources(app);
@@ -26,6 +27,7 @@ namespace RazerBatteryTray.Desktop
         private static void Main(string[] args)
         {
             bool demo = Array.IndexOf(args, "--demo") >= 0;
+            Diagnostics = Array.IndexOf(args, "--diagnostics") >= 0;
             UpdateHidden = Array.IndexOf(args, "--update-hidden") >= 0;
             int trial = Array.IndexOf(args, "--update-trial");
             if (!demo && trial < 0) {
