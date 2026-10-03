@@ -2,8 +2,6 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -55,20 +53,16 @@ namespace RazerBatteryTray.Tests
             Test("Independent clients do not share hardware cache", TestIndependentClients);
             Test("Settings, hardware cache and auto-start round trip in isolated registry keys", TestPersistence);
             Test("DPI monitor baseline, changes and shutdown", TestMonitor);
-            Test("Form state, settings, tray menus, rendering and disposal", TestForm);
-            Test("UI DPI / polling-rate commands reach the device and refresh controls", TestFormCommands);
-            Test("Silent auto-start and explicit main-window preference", TestAutoStartForm);
-            Test("All OSD styles render and retain no-activate / click-through flags", TestOsd);
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--baseline" && i + 1 < args.Length)
                 {
                     string path = args[++i];
-                    Test("Original protocol bytes and tray geometry preserved; theme intentionally changed", () => TestBaseline(path));
+                    Test("Original protocol bytes preserved", () => TestBaseline(path));
                 }
             }
             if (Array.IndexOf(args, "--hardware") >= 0)
-                Test("Live HID read and native form lifecycle (no hardware setting writes)", TestHardware);
+                Test("Live HID read (no hardware setting writes)", TestHardware);
             else Write("SKIP: live hardware; pass -Hardware to enable.");
             Write(string.Format("RESULT: {0} passed, {1} failed", passed, failed));
             File.WriteAllLines(Path.Combine(artifacts, "results.txt"), log.ToArray());
@@ -82,14 +76,6 @@ namespace RazerBatteryTray.Tests
             catch (Exception ex) { failed++; Write("FAIL: " + name + "\n" + ex); }
         }
         private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
-        private static T Field<T>(object instance, string name)
-        {
-            return (T)instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(instance);
-        }
-        private static object Call(object instance, string name, params object[] args)
-        {
-            return instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(instance, args);
-        }
         private static void Pump(int ms)
         {
             var clock = Stopwatch.StartNew();
@@ -294,141 +280,11 @@ namespace RazerBatteryTray.Tests
             Pump(300); Check(reads == before, "Disposed monitor still polling");
         }
 
-        private static void Apply(MainForm form, FakeClient device, MouseBatteryInfo state)
-        {
-            device.Current = state;
-            Call(form, "RefreshBatteryStatus", false);
-        }
-        private static void Capture(Control control, string name)
-        {
-            bool wasVisible = control.Visible;
-            var form = control as MainForm;
-            if (form != null && !wasVisible) Call(form, "ShowWindow");
-            Pump(40);
-            try
-            {
-                using (var bitmap = new Bitmap(control.Width, control.Height))
-                {
-                    control.DrawToBitmap(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
-                    bitmap.Save(Path.Combine(artifacts, name + ".png"), ImageFormat.Png);
-                }
-            }
-            finally { if (form != null && !wasVisible) form.Hide(); }
-        }
-
-        private static void TestForm()
-        {
-            var device = new FakeClient();
-            var settings = new MemorySettings();
-            var auto = new MemoryAutoStart();
-            var form = new MainForm(false, device, settings, auto, false);
-            var osd = Field<DpiOsdForm>(form, "osdForm");
-            MacroEditorForm macroEditor = null;
-            try
-            {
-                Check(Field<Label>(form, "lblBatteryBig").Text == "84%", "Awake UI");
-                Check(Field<ModernSegmentButton[]>(form, "btnDpiStages")[3].Selected, "Selected DPI");
-                Capture(form, "simulated-awake");
-                var sleep = FakeClient.State(); sleep.IsSleeping = true;
-                Apply(form, device, sleep);
-                Check(Field<Label>(form, "lblConnDot").Text.Contains("休眠") && Field<Label>(form, "lblBatteryBig").Text == "84%", "Sleep UI");
-                Capture(form, "simulated-sleep");
-                var low = FakeClient.State(); low.BatteryPercent = 20;
-                Apply(form, device, low);
-                Check(Field<bool>(form, "lastLowAlertFired"), "Low battery alert not armed");
-                Apply(form, device, low);
-                Check(Field<bool>(form, "lastLowAlertFired"), "Low battery repeat suppression");
-                low.IsCharging = true; Apply(form, device, low);
-                Check(!Field<bool>(form, "lastLowAlertFired"), "Charging resets low battery alert");
-                Apply(form, device, new MouseBatteryInfo());
-                Check(Field<Label>(form, "lblBatteryBig").Text == "--%", "Disconnected UI");
-                Check(Field<System.Windows.Forms.Timer>(form, "updateTimer").Interval == 3000, "Disconnected retry interval");
-                Capture(form, "simulated-disconnected");
-                Apply(form, device, FakeClient.State());
-                foreach (int interval in new int[] { 30000, 60000, 300000 })
-                {
-                    Call(form, "SetInterval", interval, false);
-                    Check(settings.Value.RefreshInterval == interval && Field<System.Windows.Forms.Timer>(form, "updateTimer").Interval == interval, "Interval synchronization");
-                }
-                Call(form, "SetTrayStyle", 1, false);
-                Check(settings.Value.TrayIconStyle == 1 && Field<ToolStripMenuItem>(form, "styleNumItem").Checked, "Tray setting/menu synchronization");
-                Call(form, "SetDpiOsdEnabled", false, false);
-                Call(form, "SetOsdStyle", 2, false);
-                Check(osd.OsdStyle == 2 && settings.Value.OsdStyle == 2, "OSD preference");
-                Call(form, "SetLowBatteryAlert", false, false);
-                Check(!settings.Value.LowBatteryAlert, "Alert preference");
-                Call(form, "SetAutoStart", true, false);
-                Check(auto.Enabled && Field<ModernCheckBox>(form, "chkAutoStart").Checked, "Auto-start UI");
-                Call(form, "SetAutoStartShowUI", true, false);
-                Check(settings.Value.AutoStartShowUI, "Auto-start visibility preference");
-                var macroController = new Macros.MacroController(new Macros.MacroStore(Path.Combine(artifacts,
-                    "main-form-" + Guid.NewGuid().ToString("N"), "macros.xml")), new Macros.WindowsMacroOutput(), false);
-                typeof(MainForm).GetField("macroController", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(form, macroController);
-                Call(form, "ShowMacroEditor"); macroEditor = Field<MacroEditorForm>(form, "macroEditor");
-                Check(macroEditor.Visible, "Main form macro entry"); Call(form, "ShowMacroEditor");
-                Check(ReferenceEquals(macroEditor, Field<MacroEditorForm>(form, "macroEditor")), "Duplicate editor");
-                Call(form, "StopAllMacros");
-                var closing = new FormClosingEventArgs(CloseReason.UserClosing, false);
-                Call(form, "OnFormClosing", closing);
-                Check(closing.Cancel, "Close button must minimize to tray");
-            }
-            finally { form.Dispose(); }
-            Check(form.IsDisposed && osd.IsDisposed && macroEditor != null && macroEditor.IsDisposed, "Form/OSD/macro resource cleanup");
-        }
-
-        private static void TestFormCommands()
-        {
-            var device = new FakeClient();
-            using (var form = new MainForm(false, device, new MemorySettings(), new MemoryAutoStart(), false))
-            {
-                Call(form, "SetDpiOsdEnabled", false, false);
-                form.SetDpiFromUI(1600);
-                Until(() => Field<ModernSegmentButton[]>(form, "btnDpiStages")[2].Selected, "DPI UI did not update");
-                Check(device.LastDpi == 1600 && device.LastStage == 3, "DPI command routing");
-                form.SetPollingRateFromUI(2000);
-                Until(() => Field<ModernSegmentButton[]>(form, "btnRates")[1].Selected, "Rate UI did not update");
-                Check(device.LastRate == 2000, "Rate command routing");
-            }
-        }
-
-        private static void TestAutoStartForm()
-        {
-            using (var silent = new MainForm(true, new FakeClient(), new MemorySettings(), new MemoryAutoStart(), false))
-            {
-                silent.Show(); Check(!silent.Visible, "Silent auto-start showed a window");
-            }
-            var settings = new MemorySettings(); settings.Value.AutoStartShowUI = true;
-            using (var visible = new MainForm(true, new FakeClient(), settings, new MemoryAutoStart(), false))
-            {
-                visible.Show(); Check(visible.Visible, "Explicit window preference ignored"); visible.Hide();
-            }
-        }
-
-        private static void TestOsd()
-        {
-            using (var osd = new DpiOsdForm(1.0f))
-            {
-                var cp = (CreateParams)typeof(DpiOsdForm).GetProperty("CreateParams", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(osd, null);
-                Check((cp.ExStyle & 0x08000020) == 0x08000020, "No-activate / transparent flags");
-                Check((bool)typeof(DpiOsdForm).GetProperty("ShowWithoutActivation", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(osd, null), "ShowWithoutActivation");
-                for (int style = 0; style < 3; style++)
-                {
-                    osd.OsdStyle = style;
-                    osd.ShowDpi(3000, 4, 5);
-                    Pump(30);
-                    Check(Field<int>(osd, "currentDpi") == 3000 && Field<int>(osd, "currentStage") == 4, "OSD state");
-                    Capture(osd, "osd-" + style);
-                    osd.HideOsd();
-                }
-            }
-        }
-
         private static void TestBaseline(string path)
         {
             Assembly baseline = Assembly.LoadFrom(path);
             var report = baseline.GetType("RazerBatteryTray.RazerDeviceHelper").GetMethod("CreateRazerReport", BindingFlags.Static | BindingFlags.NonPublic);
-            var draw = baseline.GetType("RazerBatteryTray.MainForm").GetMethod("DrawTrayBitmap", BindingFlags.Static | BindingFlags.NonPublic);
-            int packets = 0, icons = 0;
+            int packets = 0;
             foreach (int length in new int[] { 90, 91 })
                 foreach (byte tid in new byte[] { 0x1F, 0x3F, 0xFF })
                     foreach (byte[] command in new byte[][] {
@@ -442,22 +298,7 @@ namespace RazerBatteryTray.Tests
                         var current = RazerProtocol.CreateRazerReport(tid, command[0], command[1], command[2], length, length == 91, payload);
                         Check(Convert.ToBase64String(old) == Convert.ToBase64String(current), "Protocol differs from baseline"); packets++;
                     }
-            foreach (int size in new int[] { 16, 20, 24 })
-                foreach (int style in new int[] { 0, 1 })
-                    foreach (int percent in new int[] { -1, 0, 1, 20, 40, 84, 100 })
-                        foreach (int state in new int[] { 0, 1, 2, 3 })
-                        {
-                            bool connected = state != 0, charging = state == 2, sleeping = state == 3;
-                            if (percent < 0 && connected) continue;
-                            using (var old = (Bitmap)draw.Invoke(null, new object[] { percent, charging, connected, style, size, sleeping }))
-                            using (var current = TrayIconRenderer.DrawTrayBitmap(percent, charging, connected, style, size, sleeping))
-                            {
-                                Check(old.Size == current.Size, "Icon dimensions differ");
-                                // v1.0 changes theme colors intentionally; only size is invariant.
-                                icons++;
-                            }
-                        }
-            Write(string.Format("BASELINE: {0} identical report vectors; {1} tray image dimensions preserved (new theme).", packets, icons));
+            Write(string.Format("BASELINE: {0} identical report vectors.", packets));
         }
 
         private static void TestHardware()
@@ -477,30 +318,9 @@ namespace RazerBatteryTray.Tests
             if (state.IsSleeping) Write("LIMIT: device did not return telemetry; sleep fallback only.");
             else Check(state.BatteryPercent >= 1 && state.BatteryPercent <= 100, "Invalid live battery");
             if (state.PollingRate == 0) Write("LIMIT: live polling rate was not decoded; 0 means unknown, not 0 Hz.");
-            using (var form = new MainForm(true, client, new MemorySettings(), new MemoryAutoStart(), true))
-            {
-                form.Show();
-                Check(!form.Visible, "Live silent launch");
-                Pump(1200);
-                Check(!form.IsDisposed && Field<DpiMonitor>(form, "dpiMonitor") != null, "Native monitoring lifecycle");
-                Capture(form, "live-device");
-            }
-            Write("LIVE: native form, tray, hardware notifications and DPI worker initialized and disposed; no DPI/rate writes made.");
+            Write("LIVE: read-only telemetry verified; no DPI/rate writes made.");
         }
 
-        private sealed class MemorySettings : ISettingsStore
-        {
-            public AppSettings Value = new AppSettings();
-            public AppSettings Load() { return Value; }
-            public void Save(AppSettings value) { Value = value; }
-        }
-        private sealed class MemoryAutoStart : IAutoStartService
-        {
-            public bool Enabled;
-            public bool IsEnabled() { return Enabled; }
-            public void Sync() { }
-            public void SetEnabled(bool enabled) { Enabled = enabled; }
-        }
         private sealed class FakeClient : IRazerDeviceClient
         {
             public MouseBatteryInfo Current = State();

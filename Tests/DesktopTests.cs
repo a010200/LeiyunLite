@@ -197,7 +197,6 @@ namespace RazerBatteryTray.Desktop
             foreach (var sw in switches) { var dot = (System.Windows.Shapes.Ellipse)sw.Template.FindName("Dot", sw); var offset = ((TransformGroup)dot.RenderTransform).Children[1] as TranslateTransform; Check(offset.X == (sw.IsChecked == true ? 18 : 0), "Initial toggle position matches state: " + sw.Content); }
             Check(!Descendants<TextBlock>(settings).Any(x => x.Text.Contains("浮窗样式") || x.Text.Contains("托盘图标")), "Obsolete style settings removed");
             Check(!switches.Any(x => ((string)x.Content).Contains("DPI")), "DPI OSD toggle removed");
-            Check(typeof(ShellWindow).GetFields(BindingFlags.Instance | BindingFlags.NonPublic).All(f => f.FieldType != typeof(DpiOsdForm)), "No OSD instance in new shell");
             var toggle = switches.First(x => (string)x.Content == "关闭窗口时最小化到托盘");
             Ui.ReducedMotion = false;
             if (SystemParameters.ClientAreaAnimation) { toggle.IsChecked = false; PumpFor(35); toggle.IsChecked = true; PumpFor(45); var moving = (TranslateTransform)((TransformGroup)((System.Windows.Shapes.Ellipse)toggle.Template.FindName("Dot", toggle)).RenderTransform).Children[1]; Check(moving.X >= 0 && moving.X <= 18, "Interrupted elastic travel stays inside track"); PumpFor(500); Check(Math.Abs(moving.X - 18) < .001, "Animated toggle settles to final state"); }

@@ -7,9 +7,8 @@ try {
  [void](New-Item -ItemType Directory -Path $output)
  $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
  $wpf=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF'
- [xml]$project=Get-Content -LiteralPath 'RazerBatteryTray.csproj' -Raw
- $sources=@($project.Project.ItemGroup.Compile|Where-Object{$_}|ForEach-Object{[string]$_.Include})
- $sources+=@(Get-ChildItem -LiteralPath Desktop,Updates -Filter '*.cs'|ForEach-Object FullName)
+ . (Join-Path $root 'Tools\Get-DesktopSources.ps1')
+ $sources=@(Get-DesktopSources -ProjectRoot $root)
  $tests=@(Get-ChildItem -LiteralPath Tests -Filter 'FullVerification*.cs'|ForEach-Object FullName)
  $tests+=@(Get-ChildItem -LiteralPath Tests -Filter 'DesktopTests*.cs'|ForEach-Object FullName)
  $tests+=Join-Path $root 'Tests\MacroTests.cs'

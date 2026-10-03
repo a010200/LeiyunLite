@@ -18,7 +18,6 @@ namespace RazerBatteryTray.Tests
         {
             artifacts = directory;
             RunCore(test);
-            test("Macro editor / step / binding dialogs render, edit, save and reload", Editor);
             test("Native input hooks and SendInput Unicode to an isolated test window", NativeInput);
             test("Native callback decoding: modifiers, key-up, mouse buttons, fractional wheel and injected flags", HookDecoding);
         }
@@ -318,29 +317,7 @@ namespace RazerBatteryTray.Tests
             File.WriteAllText(path, "<broken>"); Reject(() => store.Load()); Check(File.ReadAllText(path) == "<broken>", "Corrupt overwritten");
             File.WriteAllText(path, "<!DOCTYPE LeiyunLiteMacros [<!ENTITY x SYSTEM 'file:///not-read'>]><LeiyunLiteMacros>&x;</LeiyunLiteMacros>"); Reject(() => store.Load());
         }
-        private static T Field<T>(object instance, string name) { return (T)instance.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(instance); }
         private static object Call(object instance, string name, params object[] args) { return instance.GetType().GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(instance, args); }
-        private static void Capture(Form form, string name)
-        {
-            form.Show(); Application.DoEvents();
-            using (var bitmap = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size)); bitmap.Save(Path.Combine(artifacts, name + ".png")); }
-        }
-        private static void Editor()
-        {
-            Check(Theme.Green.ToArgb() == ColorTranslator.FromHtml("#44D62C").ToArgb() && Theme.Black.ToArgb() == ColorTranslator.FromHtml("#141414").ToArgb(), "Theme");
-            var store = new MacroStore(Path.Combine(artifacts, "editor-" + Guid.NewGuid().ToString("N"), "macros.xml"));
-            var lib = Library(new MacroStep { Kind = ActionKind.Text, Value = "雷云lite 测试" }); lib.Bindings.Add(new MacroBinding { MacroId = "main", Trigger = TriggerKind.X1 }); store.Save(lib);
-            using (var controller = new MacroController(store, new Output(), false))
-            using (var editor = new MacroEditorForm(controller))
-            {
-                Capture(editor, "macro-editor"); Check(editor.BackColor == Theme.Black, "Editor background");
-                Call(editor, "NewMacro"); Field<TextBox>(editor, "nameBox").Text = "界面保存测试";
-                Check((bool)Call(editor, "Save"), "Editor save"); Check(store.Load().Macros.Count == 2 && store.Load().Macros[1].Name == "界面保存测试", "New macro save");
-                Call(editor, "CopyMacro"); Check((bool)Call(editor, "Save"), "Copy save");
-                using (var step = new MacroStepDialog(lib, "main", lib.Macros[0].Steps[0])) Capture(step, "macro-step");
-                using (var binding = new MacroBindingDialog(lib, lib.Bindings[0])) Capture(binding, "macro-binding");
-            }
-        }
         [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
         private static void NativeInput()
