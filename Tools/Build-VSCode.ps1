@@ -8,7 +8,7 @@ if (-not $msbuild) { throw 'MSBuild 17 was not found. Install Visual Studio 2022
 # Separate development output: never overwrite a distributed executable.
 Push-Location $projectRoot
 try {
-    & $msbuild 'LeiyunLite.R3.sln' /nologo /m /nr:false /t:Build "/p:Configuration=$Configuration" /p:Platform=x64 /p:OutputPath=bin\VSCode1.2.6\ /p:IntermediateOutputPath=obj\VSCode1.2.6\ /p:DebugSymbols=true /p:DebugType=full "/p:Optimize=$($Configuration -eq 'Release')" /v:minimal
-    if ($LASTEXITCODE -ne 0) { throw "v1.2.6 build failed ($LASTEXITCODE)." }
-    Write-Output 'v1.2.6 build succeeded: bin\VSCode1.2.6\LeiyunLite.Desktop.exe'
+    & $msbuild 'LeiyunLite.R3.sln' /nologo /m /nr:false /t:Build "/p:Configuration=$Configuration" /p:Platform=x64 /p:OutputPath=bin\VSCode1.2.7\ /p:IntermediateOutputPath=obj\VSCode1.2.7\ /p:DebugSymbols=true /p:DebugType=full "/p:Optimize=$($Configuration -eq 'Release')" /v:minimal
+    if ($LASTEXITCODE -ne 0) { throw "v1.2.7 build failed ($LASTEXITCODE)." }
+    Write-Output 'v1.2.7 build succeeded: bin\VSCode1.2.7\LeiyunLite.Desktop.exe'
 } finally { Pop-Location }

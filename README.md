@@ -2,17 +2,17 @@
 
 面向部分雷蛇鼠标的 Windows 桌面工具：查看电量、调整 DPI 与回报率，编辑和录制本地宏，再把它们绑定到按键或滚轮。
 
-**当前源码：v1.2.6** · Windows x64 · C# / WPF · .NET Framework 4.8 · [MIT License](LICENSE)
+**当前源码：v1.2.7** · Windows x64 · C# / WPF · .NET Framework 4.8 · [MIT License](LICENSE)
 
 这个独立仓库从 **v1.2.1 的代码快照**开始记录，由我提交并维护后续版本，不导入旧仓库的提交历史。此前版本已另行留档；这次仓库迁移不改变 v1.2.1 的程序包、更新地址或设备支持范围。代码来源与许可见文末。
 
-> [最新公开下载 v1.2.6](https://github.com/a010200/LeiyunLite/releases/tag/v1.2.6) · [v1.2.6 发布说明](docs/RELEASE-v1.2.6.md) · [安装与自动更新](docs/INSTALLING.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/a010200/LeiyunLite/issues)
+> [最新公开下载 v1.2.7](https://github.com/a010200/LeiyunLite/releases/tag/v1.2.7) · [v1.2.7 发布说明](docs/RELEASE-v1.2.7.md) · [安装与自动更新](docs/INSTALLING.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/a010200/LeiyunLite/issues)
 
 | 下载 | 适合谁 |
 |---|---|
-| [安装版 EXE](https://github.com/a010200/LeiyunLite/releases/download/v1.2.6/LeiyunLite-v1.2.6-Setup-x64.exe) | 希望有快捷方式、卸载入口和应用内安装更新 |
-| [便携版 ZIP](https://github.com/a010200/LeiyunLite/releases/download/v1.2.6/LeiyunLite-v1.2.6-win-x64.zip) | 不安装，完整解压后直接运行；升级时手动替换程序 |
-| [SHA256 校验文件](https://github.com/a010200/LeiyunLite/releases/download/v1.2.6/SHA256SUMS.txt) | 核对下载文件完整性 |
+| [安装版 EXE](https://github.com/a010200/LeiyunLite/releases/download/v1.2.7/LeiyunLite-v1.2.7-Setup-x64.exe) | 希望有快捷方式、卸载入口和应用内安装更新 |
+| [便携版 ZIP](https://github.com/a010200/LeiyunLite/releases/download/v1.2.7/LeiyunLite-v1.2.7-win-x64.zip) | 不安装，完整解压后直接运行；升级时手动替换程序 |
+| [SHA256 校验文件](https://github.com/a010200/LeiyunLite/releases/download/v1.2.7/SHA256SUMS.txt) | 核对下载文件完整性 |
 
 `update-x64.zip` 和 `update.json` 是供安装版自动更新使用的附件，不是便携包。GitHub 的 `Source code` 是源码，不是可以直接运行的软件。
 
@@ -53,7 +53,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 运行环境：**Windows 10/11 x64，.NET Framework 4.8**。本轮验证环境是 Windows 10 x64；Windows 11、多显示器和混合缩放仍需进一步实机验证。
 
 1. 从上方选择安装版或便携版。若旧版仍在运行，先保存宏草稿、停止录制/播放，再从托盘菜单选择“退出”。
-2. **安装版**：运行 `LeiyunLite-v1.2.6-Setup-x64.exe`，之后使用安装生成的快捷方式。**便携版**：完整解压 `LeiyunLite-v1.2.6-win-x64.zip` 到新目录，再运行 `LeiyunLite.Desktop.exe`。两种版本不要同时运行。安装目录的 `LeiyunLite.exe` 是新的固定启动入口，不是上游旧软件。
+2. **安装版**：运行 `LeiyunLite-v1.2.7-Setup-x64.exe`，之后使用安装生成的快捷方式。**便携版**：完整解压 `LeiyunLite-v1.2.7-win-x64.zip` 到新目录，再运行 `LeiyunLite.Desktop.exe`。两种版本不要同时运行。安装目录的 `LeiyunLite.exe` 是新的固定启动入口，不是上游旧软件。
 3. 在“设备”页查看状态。型号未明确识别时，不会开放未经确认的 DPI/回报率写入。
 4. v1.1.0 及更早便携版不会自动变成安装版，需要手动运行一次安装程序；个人宏和设置沿用原位置。便携版更换路径后，如需自启动，请在设置中重新启用“开机自启动”。
 
@@ -69,9 +69,9 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 
 安全预览使用模拟设备，不读写鼠标、不监听键鼠录制、不执行宏输入或命令、不保存设置。**它只能看界面，不能用于测试真实录制或硬件控制。**
 
-### v1.2.6
+### v1.2.7
 
-当前版本为v1.2.6，包含Fluent UI、白天配色回调、绑定页排版与文案精简。详见[版本说明](docs/RELEASE-v1.2.6.md)。软件包不会自动替换日常安装。前期评审记录见[UI-REDESIGN-FINAL.md](UI-REDESIGN-FINAL.md)和[UI-VISUAL-RECALL-REVIEW.md](UI-VISUAL-RECALL-REVIEW.md)。
+当前版本为v1.2.7，统一托盘图标与右侧面板交互，减少普通输入处理的内存分配，并改善 GitHub 限流时的更新检查与恢复提示。详见[版本说明](docs/RELEASE-v1.2.7.md)。软件包不会自动替换日常安装。前期评审记录见[UI-REDESIGN-FINAL.md](UI-REDESIGN-FINAL.md)和[UI-VISUAL-RECALL-REVIEW.md](UI-VISUAL-RECALL-REVIEW.md)。
 
 普通启动不显示输入诊断；需要协助排查宏时，正常退出已有实例后使用`LeiyunLite.Desktop.exe --diagnostics`启动。`--demo --diagnostics`仅查看诊断界面，不监听输入。
 
@@ -145,7 +145,7 @@ v1.2.3 安装版提供固定启动入口、卸载项和可选快捷方式。自�
 
 ## 从源码构建
 
-在当前源码根目录打开 PowerShell；当前标签为 [v1.2.6](https://github.com/a010200/LeiyunLite/tree/v1.2.6)。项目入口为 `LeiyunLite.Desktop.csproj`；解决方案保留兼容文件名 `LeiyunLite.R3.sln`，但构建的是当前目录源码，并非固定 R3。
+在当前源码根目录打开 PowerShell；当前标签为 [v1.2.7](https://github.com/a010200/LeiyunLite/tree/v1.2.7)。项目入口为 `LeiyunLite.Desktop.csproj`；解决方案保留兼容文件名 `LeiyunLite.R3.sln`，但构建的是当前目录源码，并非固定 R3。
 
 ### 方式一：使用现有 .NET Framework 编译器
 
@@ -155,7 +155,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 
 脚本使用 Windows 上已有的64位 .NET Framework 编译器和 WPF 程序集，并从 `Tools/LiteIconBuilder.cs` 生成图标，不需要下载第三方 NuGet 包。要求相应编译器和程序集实际存在；运行环境仍需 .NET Framework 4.8。
 
-产物：`bin\Desktop1.2.6\LeiyunLite.Desktop.exe`。
+产物：`bin\Desktop1.2.7\LeiyunLite.Desktop.exe`。
 
 ### 方式二：MSBuild / VS Code 开发构建
 
@@ -165,7 +165,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-VSCode.ps1
 ```
 
-产物：`bin\VSCode1.2.6\LeiyunLite.Desktop.exe`。在 VS Code 打开仓库内的 **`LeiyunLite.code-workspace`**，可按 **Ctrl + Shift + B** 执行 `v1.2.6: Build`。
+产物：`bin\VSCode1.2.7\LeiyunLite.Desktop.exe`。在 VS Code 打开仓库内的 **`LeiyunLite.code-workspace`**，可按 **Ctrl + Shift + B** 执行 `v1.2.7: Build`。
 
 > 公开工作区不含维护者的本机路径或编辑器缓存。编辑器代码分析与编译是两回事；环境设置及常见问题见 [构建与开发](docs/BUILDING.md)。F5 断点调试尚未配置。
 
@@ -197,7 +197,7 @@ docs/          各阶段使用说明与验证记录
 screenshots/   界面配图
 ```
 
-历史说明只代表对应版本；当前源码状态以本页和 `CHANGELOG.md` 为准，v1.2.6状态见 `docs/RELEASE-v1.2.6.md`。旧 WinForms UI 与旧构建入口已移除；当前软件仅构建 `LeiyunLite.Desktop.csproj`，使用 `Desktop/` 中的 WPF 界面。
+历史说明只代表对应版本；当前源码状态以本页和 `CHANGELOG.md` 为准，v1.2.7状态见 `docs/RELEASE-v1.2.7.md`。旧 WinForms UI 与旧构建入口已移除；当前软件仅构建 `LeiyunLite.Desktop.csproj`，使用 `Desktop/` 中的 WPF 界面。
 
 ## 配置文件与反馈
 

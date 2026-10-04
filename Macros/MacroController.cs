@@ -14,6 +14,7 @@ namespace RazerBatteryTray.Macros
         private readonly MacroEngine engine;
         private readonly BindingRouter router;
         private readonly WindowsMacroOutput windowsOutput;
+        private readonly bool diagnosticsEnabled;
         private readonly object timingGate = new object();
         private readonly Queue<string> timingLines = new Queue<string>();
         private long timingOrigin;
@@ -49,9 +50,10 @@ namespace RazerBatteryTray.Macros
         public event Action<string> StatusChanged;
         public event Action<string> InputDiagnosticChanged;
         private int diagnosticSequence;
-        public MacroController(IMacroStore store, IMacroOutput output, bool installHooks, bool initiallySuspended = false)
+        public MacroController(IMacroStore store, IMacroOutput output, bool installHooks, bool initiallySuspended = false, bool diagnosticsEnabled = false)
         {
             this.store = store;
+            this.diagnosticsEnabled = diagnosticsEnabled;
             library = store.Load();
             engine = new MacroEngine(output);
             windowsOutput = output as WindowsMacroOutput;
@@ -61,8 +63,10 @@ namespace RazerBatteryTray.Macros
             InputDiagnostic = "输入诊断：按住右键再按中键，可确认触发和模拟输入是否已到达 Windows。";
             engine.StatusChanged += message => {
                 Status = message;
-                if (message.StartsWith("执行中：", StringComparison.Ordinal)) RecordTiming("宏状态：运行");
-                else if (message.StartsWith("已停止：", StringComparison.Ordinal)) RecordTiming("宏状态：停止");
+                if (diagnosticsEnabled) {
+                    if (message.StartsWith("执行中：", StringComparison.Ordinal)) RecordTiming("宏状态：运行");
+                    else if (message.StartsWith("已停止：", StringComparison.Ordinal)) RecordTiming("宏状态：停止");
+                }
                 var handler = StatusChanged; if (handler != null) handler(message);
             };
             if (installHooks)
@@ -75,6 +79,7 @@ namespace RazerBatteryTray.Macros
         public MacroLibrary Snapshot() { lock (configurationGate) return library.Clone(); }
         private void RecordTiming(string description)
         {
+            if (!diagnosticsEnabled) return;
             long now = Stopwatch.GetTimestamp();
             lock (timingGate)
             {
@@ -137,10 +142,10 @@ namespace RazerBatteryTray.Macros
                 active.Capture(stroke);
             }
             if (recordingSession && stroke.Down && stroke.Trigger == TriggerKind.Keyboard && stroke.Key == 123 && (stroke.Modifiers & (KeyModifiers.Control | KeyModifiers.Shift)) == (KeyModifiers.Control | KeyModifiers.Shift)) recordingStopRequested = true;
-            bool chord = stroke.Down && stroke.Trigger == TriggerKind.Middle && stroke.RightButtonDown;
+            bool chord = diagnosticsEnabled && stroke.Down && stroke.Trigger == TriggerKind.Middle && stroke.RightButtonDown;
             string activeBefore = chord ? engine.ActiveBinding : null;
             long sentBefore = chord && windowsOutput != null ? windowsOutput.TotalInputsSent : 0;
-            bool trace = stroke.Trigger == TriggerKind.Middle || stroke.Trigger == TriggerKind.Right;
+            bool trace = diagnosticsEnabled && (stroke.Trigger == TriggerKind.Middle || stroke.Trigger == TriggerKind.Right);
             bool runningBefore = trace && engine.IsRunning;
             bool suppress = router.Handle(stroke);
             if (trace)
@@ -163,8 +168,12 @@ namespace RazerBatteryTray.Macros
                         upsSent, upsPassed, blocked, sequence);
                 }
             }
-            if (chord)
-            {
+            if (chord) DiagnoseChord(activeBefore, sentBefore);
+            return suppress;
+        }
+        // Keep closure creation in this opt-in helper, not at RouteInput entry.
+        private void DiagnoseChord(string activeBefore, long sentBefore)
+        {
                 string activeAfter = engine.ActiveBinding;
                 bool started = activeAfter != null && activeAfter != activeBefore;
                 int sequence = Interlocked.Increment(ref diagnosticSequence);
@@ -182,8 +191,6 @@ namespace RazerBatteryTray.Macros
                     else if (started)
                         SetInputDiagnostic("右键＋中键：宏已启动，但 80ms 内没有成功提交输入；请检查宏内容或目标窗口权限。");
                 });
-            }
-            return suppress;
         }
         private void SetInputDiagnostic(string message)
         {

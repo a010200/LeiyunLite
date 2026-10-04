@@ -178,9 +178,9 @@ namespace RazerBatteryTray.Desktop
                     Click(Find<Button>(overlay).Single(b => (b.Content as string) == "解除绑定")); Check(!window.ActiveMacros.Bindings.Any(b => b.Id == binding.Id), "Advanced unbind did not take effect"); window.CloseDrawer();
                 });
                 Test("Open advanced drawer follows live layout / ordinary width remains 390", () => {
-                    window.Width = 1180; window.Height = 840; Call(page, "OpenAdvancedBindings"); var overlay = Field<Grid>(window, "overlay"); var drawer = (Border)overlay.Children[0];
+                    window.Width = 1180; window.Height = 840; Call(page, "OpenAdvancedBindings"); var overlay = Field<Grid>(window, "overlay"); var drawer = Field<Border>(window, "activeDrawer");
                     foreach (int w in new[] { 1180, 960, 760, 700, 1180 }) { window.Width = w; Pump(); double expected = w >= 1100 ? 580 : w >= 820 ? 520 : overlay.ActualWidth - 24; Check(Math.Abs(drawer.ActualWidth - expected) < 2 && drawer.ActualWidth <= overlay.ActualWidth, "Advanced width on resize: " + w + " / " + drawer.ActualWidth); }
-                    window.CloseDrawer(); window.OpenDrawer("Normal", Ui.Text("No changes")); Pump(); Check(Math.Abs(((Border)overlay.Children[0]).ActualWidth - 390) < 1, "Ordinary drawer width changed"); window.CloseDrawer();
+                    window.CloseDrawer(); window.OpenDrawer("Normal", Ui.Text("No changes")); Pump(); Check(Math.Abs(Field<Border>(window, "activeDrawer").ActualWidth - 390) < 1, "Ordinary drawer width changed"); window.CloseDrawer();
                 });
                 foreach (string theme in new[] { "classic", "fluent" }) foreach (int width in new[] { 1180, 960, 760, 700 }) {
                     int w = width; string t = theme;
@@ -202,7 +202,7 @@ namespace RazerBatteryTray.Desktop
                         else { Check(Field<Grid>(page, "mappingLayout").ColumnDefinitions[0].Width.Value == (w >= 1100 ? 280 : 230), "Shelf width"); Check(Field<Expander>(page, "compactShelf").Visibility == Visibility.Collapsed && Field<Border>(page, "macroShelf").Parent is Grid, "Wide shelf is still a chooser"); }
                         Capture(window, t + "-" + w + "-bindings");
                         var scroll = (ScrollViewer)Field<FrameworkElement>(page, "bindingWorkspace"); scroll.ScrollToEnd(); Pump(); Capture(window, t + "-" + w + "-bindings-model"); scroll.ScrollToTop();
-                        Call(page, "OpenAdvancedBindings"); var overlay = Field<Grid>(window, "overlay"); Within((FrameworkElement)overlay.Children[0]); Capture(window, t + "-" + w + "-advanced-bindings"); ((ScrollViewer)((Border)overlay.Children[0]).Child).ScrollToEnd(); Pump(); Capture(window, t + "-" + w + "-advanced-bindings-bottom"); window.CloseDrawer();
+                        Call(page, "OpenAdvancedBindings"); var overlay = Field<Grid>(window, "overlay"); Within((FrameworkElement)overlay.Children[0]); Capture(window, t + "-" + w + "-advanced-bindings"); ((ScrollViewer)Field<Border>(window, "activeDrawer").Child).ScrollToEnd(); Pump(); Capture(window, t + "-" + w + "-advanced-bindings-bottom"); window.CloseDrawer();
                         window.Navigate(2); Pump(); var settings = Field<FrameworkElement[]>(window, "views")[2]; Check(!Find<TextBlock>(settings).Any(x => x.Text.Contains("蓝灰") || x.Text.Contains("charcoal / green")), "Theme color legend remains"); Within(settings); Capture(window, t + "-" + w + "-settings");
                         window.Navigate(3); Pump(); Within(Field<FrameworkElement[]>(window, "views")[3]); Capture(window, t + "-" + w + "-update");
                         window.Navigate(0); Pump(); var deviceView = Field<FrameworkElement[]>(window, "views")[0]; Within(deviceView);

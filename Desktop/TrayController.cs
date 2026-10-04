@@ -114,14 +114,14 @@ namespace RazerBatteryTray.Desktop
             if (menu)
             {
                 var stack = new StackPanel(); surface.Child = stack;
-                Add(stack, "⌂", Ui.T("打开主界面", "Open main window"), () => shell.OpenPage(0));
-                Add(stack, "⌘", Ui.T("宏与绑定", "Macros and bindings"), () => shell.OpenPage(1));
-                Add(stack, "⚙", Ui.T("设置", "Settings"), () => shell.OpenPage(2));
+                Add(stack, UiIcons.Home(), Ui.T("打开主界面", "Open main window"), () => shell.OpenPage(0));
+                Add(stack, UiIcons.Macros(), Ui.T("宏与绑定", "Macros and bindings"), () => shell.OpenPage(1));
+                Add(stack, UiIcons.Settings(), Ui.T("设置", "Settings"), () => shell.OpenPage(2));
                 stack.Children.Add(Divider());
-                Add(stack, paused ? "▷" : "Ⅱ", paused ? Ui.T("恢复宏绑定", "Resume macro bindings") : Ui.T("暂停宏绑定", "Pause macro bindings"), () => pause(!paused));
-                Add(stack, "□", Ui.T("停止所有宏", "Stop all macros"), () => { if (shell.Macros != null) shell.Macros.Stop(); });
+                Add(stack, paused ? UiIcons.Play() : UiIcons.Pause(), paused ? Ui.T("恢复宏绑定", "Resume macro bindings") : Ui.T("暂停宏绑定", "Pause macro bindings"), () => pause(!paused));
+                Add(stack, UiIcons.Stop(), Ui.T("停止所有宏", "Stop all macros"), () => { if (shell.Macros != null) shell.Macros.Stop(); });
                 options[options.Count - 1].ToolTip = "Ctrl + Shift + F12";
-                stack.Children.Add(Divider()); Add(stack, "×", Ui.T("退出软件", "Exit"), shell.RequestExit);
+                stack.Children.Add(Divider()); Add(stack, UiIcons.Exit(), Ui.T("退出软件", "Exit"), shell.RequestExit);
             }
             else
             {
@@ -148,10 +148,14 @@ namespace RazerBatteryTray.Desktop
             KeyboardNavigation.SetTabNavigation(this, KeyboardNavigationMode.Cycle);
         }
         private static UIElement Divider() { return new Border { Height = 1, Background = Ui.Brush("#353535"), Margin = new Thickness(8, 5, 8, 5) }; }
-        private void Add(Panel panel, string glyph, string label, Action action)
+        private void Add(Panel panel, UIElement icon, string label, Action action)
         {
             var button = Ui.Button("", () => { Close(); action(); }); button.Height = 38; button.Margin = new Thickness(0, 1, 0, 1); button.Padding = new Thickness(10, 0, 8, 0); button.Background = Brushes.Transparent; button.BorderThickness = new Thickness(0); button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-            var row = new DockPanel(); var symbol = Ui.Text(glyph, 16, Ui.Muted); symbol.Width = 29; symbol.Margin = new Thickness(0); symbol.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(symbol);
+            var row = new DockPanel();
+            var holder = new Grid { Width = 29, VerticalAlignment = VerticalAlignment.Center };
+            var visual = icon as FrameworkElement;
+            if (visual != null) { visual.HorizontalAlignment = HorizontalAlignment.Left; visual.VerticalAlignment = VerticalAlignment.Center; }
+            holder.Children.Add(icon); row.Children.Add(holder);
             var text = Ui.Text(label); text.Margin = new Thickness(0); text.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(text); button.Content = row;
             button.MouseEnter += (s, e) => button.Background = Ui.Brush("#292929"); button.MouseLeave += (s, e) => button.Background = Brushes.Transparent;
             button.GotKeyboardFocus += (s, e) => button.Background = Ui.Brush("#292929"); button.LostKeyboardFocus += (s, e) => button.Background = Brushes.Transparent;

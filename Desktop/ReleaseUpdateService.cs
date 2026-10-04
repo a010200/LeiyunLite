@@ -100,7 +100,12 @@ namespace RazerBatteryTray.Desktop
                 if (code >= 300 && code <= 399 && response.Headers.Location != null) {
                     Uri next = new Uri(uri, response.Headers.Location); response.Dispose(); uri = next; continue;
                 }
-                if (!response.IsSuccessStatusCode) { response.Dispose(); throw new IOException("GitHub HTTP " + code + ". Please retry later or open the release page."); }
+                if (!response.IsSuccessStatusCode) {
+                    var rateLimit = asset ? null : GitHubRateLimitException.FromResponse(response, DateTimeOffset.UtcNow);
+                    response.Dispose();
+                    if (rateLimit != null) throw rateLimit;
+                    throw new IOException("GitHub HTTP " + code + ". Please retry later or open the release page.");
+                }
                 return response;
             }
             throw new IOException("Too many update redirects.");

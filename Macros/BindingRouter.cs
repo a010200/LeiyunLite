@@ -3,6 +3,18 @@ using System.Collections.Generic;
 
 namespace RazerBatteryTray.Macros
 {
+    // Modifiers are deliberately not part of physical identity: a release must
+    // still balance its down even when unrelated modifiers changed while held.
+    internal struct PhysicalInputKey : IEquatable<PhysicalInputKey>
+    {
+        internal readonly TriggerKind Trigger;
+        internal readonly int Key;
+        internal PhysicalInputKey(TriggerKind trigger, int key)
+        { Trigger = trigger; Key = trigger == TriggerKind.Keyboard ? key : 0; }
+        public bool Equals(PhysicalInputKey other) { return Trigger == other.Trigger && Key == other.Key; }
+        public override bool Equals(object obj) { return obj is PhysicalInputKey && Equals((PhysicalInputKey)obj); }
+        public override int GetHashCode() { unchecked { return ((int)Trigger * 397) ^ Key; } }
+    }
     internal sealed class InputStroke
     {
         public TriggerKind Trigger;
@@ -14,16 +26,16 @@ namespace RazerBatteryTray.Macros
         public bool BypassBindings { get; set; }
         public bool RightButtonDown { get; set; }
         internal bool RecordingAreaAllowed, SkipRecording, BreakRecordingTiming;
-        public string Physical { get { return Trigger + ":" + (Trigger == TriggerKind.Keyboard ? Key : 0); } }
+        public PhysicalInputKey Physical { get { return new PhysicalInputKey(Trigger, Key); } }
     }
     internal sealed class BindingRouter
     {
         private readonly object gate = new object();
         private readonly IMacroRunner engine;
         private MacroLibrary library = new MacroLibrary();
-        private readonly HashSet<string> pressed = new HashSet<string>();
-        private readonly HashSet<string> suppressed = new HashSet<string>();
-        private readonly Dictionary<string, string> held = new Dictionary<string, string>();
+        private readonly HashSet<PhysicalInputKey> pressed = new HashSet<PhysicalInputKey>();
+        private readonly HashSet<PhysicalInputKey> suppressed = new HashSet<PhysicalInputKey>();
+        private readonly Dictionary<PhysicalInputKey, string> held = new Dictionary<PhysicalInputKey, string>();
         public volatile bool Suspended;
         internal BindingRouter(IMacroRunner engine) { this.engine = engine; }
         public void Configure(MacroLibrary snapshot) { lock (gate) { library = snapshot; held.Clear(); } }
@@ -75,7 +87,7 @@ namespace RazerBatteryTray.Macros
             if (stroke.Injected) return false;
             lock (gate)
             {
-                string physical = stroke.Physical;
+                var physical = stroke.Physical;
                 if (!stroke.Down)
                 {
                     pressed.Remove(physical);

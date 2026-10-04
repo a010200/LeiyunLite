@@ -1,0 +1,2 @@
+# Preserve pinned upstream SVG test fixtures byte-for-byte, including their EOF.
+/Tests/Fixtures/FluentSystemIcons/*.svg -text whitespace=cr-at-eol,-blank-at-eof

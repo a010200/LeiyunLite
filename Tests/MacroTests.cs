@@ -185,7 +185,7 @@ namespace RazerBatteryTray.Tests
         private static void InputTimingSummary()
         {
             var store = new MacroStore(Path.Combine(artifacts, "timing-" + Guid.NewGuid().ToString("N"), "macros.xml"));
-            using (var controller = new MacroController(store, new Output(), false))
+            using (var controller = new MacroController(store, new Output(), false, diagnosticsEnabled: true))
             {
                 Check(controller.CopyInputTiming().Contains("尚无相关输入"), "Empty timing state was not reported");
                 Call(controller, "RouteInput", new InputStroke { Trigger = TriggerKind.Keyboard, Key = 65, Down = true });

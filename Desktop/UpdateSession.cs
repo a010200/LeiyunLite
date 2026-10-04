@@ -29,18 +29,22 @@ namespace RazerBatteryTray.Desktop
         private CancellationTokenSource preparation;
         private readonly IReleaseUpdateSource source;
         private readonly bool testSource;
+        private readonly UpdateCheckState checkState;
+        private readonly Func<DateTime> utcNow;
         private bool disposed, autoInstallFailed;
-        private DateTime nextCheck = DateTime.UtcNow.AddSeconds(45);
         internal readonly InstallLayout Installation;
         internal ReleaseOffer Offer;
         internal string Downloaded, Job, Status = Ui.T("准备就绪", "Ready");
         internal int Progress;
         internal bool Busy { get { return operation != null || preparation != null; } }
         internal event Action Changed;
-        internal UpdateSession(ShellWindow shell, IReleaseUpdateSource source = null, InstallLayout installation = null)
+        internal UpdateSession(ShellWindow shell, IReleaseUpdateSource source = null, InstallLayout installation = null, UpdateCheckState checkState = null, Func<DateTime> utcNow = null)
         {
             this.shell = shell;
             this.source = source ?? new ReleaseUpdateSource(); testSource = source != null;
+            this.utcNow = utcNow ?? (() => DateTime.UtcNow);
+            this.checkState = checkState ?? new UpdateCheckState(shell.Demo || testSource ? null : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LeiyunLite"));
+            this.checkState.Load(this.utcNow());
             Installation = installation ?? (shell.Demo ? null : InstallLayout.Detect(System.Reflection.Assembly.GetExecutingAssembly().Location));
             timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
             timer.Tick += async (s, e) => await Tick();
@@ -50,14 +54,14 @@ namespace RazerBatteryTray.Desktop
         internal void SetPolicy(string policy, bool value)
         {
             shell.SaveUpdatePolicy(policy, value);
-            if (policy == "check") nextCheck = DateTime.UtcNow.AddSeconds(45);
+            if (policy == "check") checkState.ScheduleStartup(utcNow());
             if (!value) Cancel();
             autoInstallFailed = false; Notify();
         }
         internal async Task Tick()
         {
             if (disposed || Busy || shell.Demo) return;
-            if (shell.Preferences.AutoCheckUpdates && DateTime.UtcNow >= nextCheck) {
+            if (shell.Preferences.AutoCheckUpdates && checkState.CanCheck(false, utcNow())) {
                 await Check(false);
                 if (Offer != null && shell.Preferences.AutoDownloadUpdates && !Busy) await Download(false);
             }
@@ -79,17 +83,33 @@ namespace RazerBatteryTray.Desktop
         }
         private async Task CheckCore(bool manual)
         {
+            if (disposed || operation != null) return;
+            if (!checkState.CanCheck(manual, utcNow())) {
+                if (manual) {
+                    Offer = null; Job = null; Downloaded = null; Progress = 0;
+                    Status = RateLimitStatus(); Notify();
+                }
+                return;
+            }
             if (!Begin()) return; Offer = null; Job = null; Downloaded = null; Progress = 0;
-            Status = Ui.T("正在检查…", "Checking…"); Notify(); nextCheck = DateTime.UtcNow.AddHours(6);
+            Status = Ui.T("正在检查…", "Checking…"); Notify();
             try {
                 var offer = await source.Check(shell.Preferences.IncludePrereleases, operation.Token);
                 operation.Token.ThrowIfCancellationRequested(); Offer = offer;
                 if (disposed) return;
+                checkState.Succeeded(utcNow());
                 Status = Offer == null ? Ui.T("当前已是最新兼容版本。", "No newer compatible version.") : Ui.T("发现新版本：", "New version: ") + Offer.Tag;
                 if (!manual && Offer != null) shell.Notice(Status);
-            } catch (OperationCanceledException) { Status = Ui.T("检查已取消或超时。", "Check cancelled or timed out."); }
-              catch (Exception ex) { nextCheck = DateTime.UtcNow.AddMinutes(30); Status = Ui.T("检查失败：", "Check failed: ") + ex.Message; }
+            } catch (GitHubRateLimitException ex) { checkState.RateLimited(ex, utcNow()); Status = RateLimitStatus(); }
+              catch (OperationCanceledException) { checkState.Failed(utcNow()); Status = Ui.T("检查已取消或超时。", "Check cancelled or timed out."); }
+              catch (Exception ex) { checkState.Failed(utcNow()); Status = Ui.T("检查失败：", "Check failed: ") + ex.Message; }
             finally { End(); }
+        }
+        private string RateLimitStatus()
+        {
+            DateTime now = utcNow().ToLocalTime(), until = checkState.RateLimitedUntilUtc.ToLocalTime();
+            string time = until.ToString(until.Date == now.Date ? "HH:mm" : "MM-dd HH:mm", System.Globalization.CultureInfo.CurrentCulture);
+            return Ui.T("GitHub 更新接口当前请求较多，暂时无法检查更新。预计可在 ", "GitHub update requests are rate limited. Try again after ") + time + Ui.T(" 后重试。", ".");
         }
         internal async Task Download(bool manual)
         {

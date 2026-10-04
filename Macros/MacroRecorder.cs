@@ -13,7 +13,7 @@ namespace RazerBatteryTray.Macros
     internal sealed class RecordingBuffer
     {
         internal readonly List<MacroStep> Steps = new List<MacroStep>();
-        private readonly Dictionary<string, MacroStep> held = new Dictionary<string, MacroStep>();
+        private readonly Dictionary<PhysicalInputKey, MacroStep> held = new Dictionary<PhysicalInputKey, MacroStep>();
         private readonly RecordingDelay delay;
         private readonly int fixedDelay, capacity;
         private long previous;
@@ -37,7 +37,7 @@ namespace RazerBatteryTray.Macros
                 {
                     var last = Steps[Steps.Count - 1];
                     if (last.Kind != ActionKind.Delay && !StopModifier(last)) break;
-                    if (StopModifier(last)) held.Remove(TriggerKind.Keyboard + ":" + last.KeyCode);
+                    if (StopModifier(last)) held.Remove(new PhysicalInputKey(TriggerKind.Keyboard, last.KeyCode));
                     Steps.RemoveAt(Steps.Count - 1);
                 }
                 Reason = "shortcut"; return false;

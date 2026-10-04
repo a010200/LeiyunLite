@@ -45,6 +45,10 @@ namespace RazerBatteryTray.Desktop
         private bool refreshing, exiting, disposed, discardApproved, runtimeInitialized;
         private FrameworkElement previousFocus;
         private Func<LayoutMode, double> drawerPreferredWidth;
+        private const double DrawerHandleProtrusion = 14;
+        private Border activeDrawer;
+        private Grid activeDrawerHost;
+        private Button drawerCollapseButton;
         internal bool StartHidden { get; private set; }
         internal bool DrawerOpen { get { return overlay.Visibility == Visibility.Visible; } }
         internal event Action Refreshed;
@@ -67,7 +71,7 @@ namespace RazerBatteryTray.Desktop
             Ui.ApplyTheme(Preferences.Theme);
             if (!demo)
             {
-                Macros = new MacroController(new MacroStore(), new WindowsMacroOutput(), true, DesktopApp.TrialToken != null);
+                Macros = new MacroController(new MacroStore(), new WindowsMacroOutput(), true, DesktopApp.TrialToken != null, DesktopApp.Diagnostics);
                 Macros.StatusChanged += message => Dispatcher.BeginInvoke(new Action(() => { if (!disposed) Notice(message); }));
                 Draft = Macros.Snapshot();
             }
@@ -98,8 +102,12 @@ namespace RazerBatteryTray.Desktop
                 (s, e) => { if (macroPage != null) macroPage.SaveDraft(); e.Handled = true; },
                 (s, e) => { e.CanExecute = currentPage == 1 && macroPage != null && !macroPage.IsBindingsTab && !macroPage.IsRecording; e.Handled = true; }));
             PreviewKeyDown += (s, e) => {
-                if (e.Key == Key.Escape && DrawerOpen) { CloseDrawer(); e.Handled = true; }
                 if (e.Key == Key.F12 && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift)) { if (Macros != null) Macros.Stop(); e.Handled = true; }
+            };
+            // Bubble only: editors and open ComboBoxes consume their own Escape first.
+            KeyDown += (s, e) => {
+                if (!e.Handled && e.Key == Key.Escape && DrawerOpen && (macroPage == null || !macroPage.IsRecording))
+                { CloseDrawer(); e.Handled = true; }
             };
         }
         internal async Task InitializeRuntime()
@@ -150,7 +158,11 @@ namespace RazerBatteryTray.Desktop
             toast.Margin = new Thickness(30, 8, 30, 12); Grid.SetRow(toast, 1); content.Children.Add(toast);
             overlay.Background = Ui.Brush("Overlay"); overlay.Visibility = Visibility.Collapsed;
             // Navigation width settles during measure; clamp drawers again to the measured content area.
-            overlay.SizeChanged += (s, e) => { foreach (FrameworkElement drawer in overlay.Children) drawer.Width = DrawerWidth(); };
+            overlay.SizeChanged += (s, e) => ResizeActiveDrawer();
+            overlay.PreviewMouseLeftButtonDown += (s, e) => {
+                if (DrawerOpen && !InsideDrawer(e.OriginalSource as DependencyObject))
+                { CloseDrawer(); e.Handled = true; }
+            };
             Grid.SetRowSpan(overlay, 2); content.Children.Add(overlay);
             Content = root;
             RebuildPages(0);
@@ -167,7 +179,7 @@ namespace RazerBatteryTray.Desktop
                 navigation[i].ToolTip = NavigationName(i); navigation[i].HorizontalContentAlignment = Layout == LayoutMode.Compact ? HorizontalAlignment.Center : HorizontalAlignment.Left;
                 navigation[i].Padding = new Thickness(Layout == LayoutMode.Compact ? 8 : 12, 14, 8, 14);
             }
-            foreach (FrameworkElement drawer in overlay.Children) drawer.Width = DrawerWidth();
+            ResizeActiveDrawer();
             if (LayoutChanged != null) LayoutChanged();
         }
         internal void RebuildPages(int destination)
@@ -213,16 +225,80 @@ namespace RazerBatteryTray.Desktop
         }
         internal void OpenDrawer(string title, UIElement content, Func<LayoutMode, double> preferredWidth = null)
         {
-            previousFocus = Keyboard.FocusedElement as FrameworkElement;
+            if (!DrawerOpen) previousFocus = Keyboard.FocusedElement as FrameworkElement;
             drawerPreferredWidth = preferredWidth;
+            if (activeDrawer != null) Ui.Stop(activeDrawer);
             overlay.Children.Clear();
-            var panel = Ui.Stack(Ui.Row(Ui.Text(title, 24), Ui.Button("×", CloseDrawer)), content);
+            var titleBlock = Ui.Text(title, 24); titleBlock.Margin = new Thickness(0, 0, 0, 14);
+            var panel = Ui.Stack(titleBlock, content);
             var drawer = new Border { Width = DrawerWidth(), Background = Ui.Background, BorderBrush = Ui.Border, BorderThickness = new Thickness(1, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(24), Child = Ui.Scroll(panel) };
-            overlay.Children.Add(drawer); overlay.Visibility = Visibility.Visible; Ui.Enter(drawer, true);
-            KeyboardNavigation.SetTabNavigation(drawer, KeyboardNavigationMode.Cycle);
+            activeDrawer = drawer;
+            activeDrawerHost = new Grid { Width = drawer.Width + DrawerHandleProtrusion, HorizontalAlignment = HorizontalAlignment.Right };
+            drawerCollapseButton = Ui.Button("", CloseDrawer);
+            drawerCollapseButton.Content = UiIcons.ChevronRight();
+            drawerCollapseButton.ToolTip = Ui.T("收起面板", "Collapse panel");
+            System.Windows.Automation.AutomationProperties.SetName(drawerCollapseButton, Ui.T("收起面板", "Collapse panel"));
+            drawerCollapseButton.Width = 30; drawerCollapseButton.Height = 50;
+            drawerCollapseButton.Margin = new Thickness(0); drawerCollapseButton.Padding = new Thickness(0);
+            drawerCollapseButton.HorizontalAlignment = HorizontalAlignment.Left;
+            drawerCollapseButton.VerticalAlignment = VerticalAlignment.Center;
+            drawerCollapseButton.HorizontalContentAlignment = HorizontalAlignment.Center;
+            drawerCollapseButton.Background = Ui.Background; drawerCollapseButton.BorderBrush = Ui.Border;
+            drawerCollapseButton.BorderThickness = new Thickness(1, 1, 0, 1);
+            drawerCollapseButton.Template = DrawerHandleTemplate();
+            // Follow the existing drawer entrance, without starting a second animation.
+            drawerCollapseButton.SetBinding(UIElement.RenderTransformProperty, new System.Windows.Data.Binding("RenderTransform") { Source = drawer });
+            drawerCollapseButton.SetBinding(UIElement.OpacityProperty, new System.Windows.Data.Binding("Opacity") { Source = drawer });
+            activeDrawerHost.Children.Add(drawer); activeDrawerHost.Children.Add(drawerCollapseButton);
+            overlay.Children.Add(activeDrawerHost); overlay.Visibility = Visibility.Visible; Ui.Enter(drawer, true);
+            KeyboardNavigation.SetTabNavigation(activeDrawerHost, KeyboardNavigationMode.Cycle);
             drawer.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
         }
-        internal void CloseDrawer() { foreach (FrameworkElement c in overlay.Children) Ui.Stop(c); overlay.Visibility = Visibility.Collapsed; overlay.Children.Clear(); if (macroPage != null) macroPage.DrawerClosed(); if (previousFocus != null) previousFocus.Focus(); }
+        private static ControlTemplate DrawerHandleTemplate()
+        {
+            var border = new FrameworkElementFactory(typeof(Border), "HandleChrome");
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(6, 0, 0, 6));
+            border.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Background") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
+            border.SetBinding(Border.BorderBrushProperty, new System.Windows.Data.Binding("BorderBrush") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
+            border.SetBinding(Border.BorderThicknessProperty, new System.Windows.Data.Binding("BorderThickness") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
+            var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+            presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(presenter);
+            var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Border.BackgroundProperty, Ui.Brush("ControlHoverBackground"), "HandleChrome")); template.Triggers.Add(hover);
+            var pressed = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
+            pressed.Setters.Add(new Setter(Border.BackgroundProperty, Ui.Brush("ControlPressedBackground"), "HandleChrome")); template.Triggers.Add(pressed);
+            var focus = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
+            focus.Setters.Add(new Setter(Border.BorderBrushProperty, Ui.Brush("SelectionIndicator"), "HandleChrome")); template.Triggers.Add(focus);
+            return template;
+        }
+        private bool InsideDrawer(DependencyObject source)
+        {
+            while (source != null)
+            {
+                if (source == activeDrawerHost) return true;
+                source = source is Visual || source is System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+            }
+            return false;
+        }
+        private void ResizeActiveDrawer()
+        {
+            if (activeDrawer == null || activeDrawerHost == null) return;
+            activeDrawer.Width = DrawerWidth(); activeDrawerHost.Width = activeDrawer.Width + DrawerHandleProtrusion;
+        }
+        internal void CloseDrawer()
+        {
+            if (activeDrawer != null) Ui.Stop(activeDrawer);
+            if (drawerCollapseButton != null) Ui.Stop(drawerCollapseButton);
+            if (activeDrawerHost != null) Ui.Stop(activeDrawerHost);
+            overlay.Visibility = Visibility.Collapsed; overlay.Children.Clear();
+            activeDrawer = null; activeDrawerHost = null; drawerCollapseButton = null; drawerPreferredWidth = null;
+            if (macroPage != null) macroPage.DrawerClosed();
+            var focus = previousFocus; previousFocus = null; if (focus != null) focus.Focus();
+        }
         internal void Notice(string message) { toast.Show(message); }
         internal async Task RefreshDevice()
         {

@@ -11,8 +11,8 @@ namespace RazerBatteryTray
     // One source for window titles, About, update checks and assembly metadata.
     internal static class AppVersion
     {
-        internal const string Number = "1.2.6";
-        internal const string AssemblyNumber = "1.2.6.0";
+        internal const string Number = "1.2.7";
+        internal const string AssemblyNumber = "1.2.7.0";
         internal const string DisplayName = "雷云lite v" + Number;
     }
 }
