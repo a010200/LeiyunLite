@@ -75,6 +75,12 @@ promo_*
 !screenshots/v1.1.0-dpi.png
 !screenshots/v1.1.0-recording.png
 !screenshots/v1.2.0-updates.png
+!screenshots/v1.2.7-overview.png
+!screenshots/v1.2.7-device.png
+!screenshots/v1.2.7-bindings.png
+!screenshots/v1.2.7-tray-menu.png
+!screenshots/v1.2.7-recording.png
+!screenshots/v1.2.7-updates.png
 
 TestConsole.exe
 render_menu_from_exe.cs
