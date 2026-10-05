@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -160,7 +162,9 @@ namespace RazerBatteryTray.Desktop
             // Navigation width settles during measure; clamp drawers again to the measured content area.
             overlay.SizeChanged += (s, e) => ResizeActiveDrawer();
             overlay.PreviewMouseLeftButtonDown += (s, e) => {
-                if (DrawerOpen && !InsideDrawer(e.OriginalSource as DependencyObject))
+                // A captured click can originate in a separate Popup visual tree.
+                // Let the current dropdown finish selection / outside dismissal first.
+                if (DrawerOpen && !InsideDrawer(e.OriginalSource as DependencyObject) && !HasOpenDrawerComboBox(activeDrawerHost))
                 { CloseDrawer(); e.Handled = true; }
             };
             Grid.SetRowSpan(overlay, 2); content.Children.Add(overlay);
@@ -246,17 +250,29 @@ namespace RazerBatteryTray.Desktop
             drawerCollapseButton.Background = Ui.Background; drawerCollapseButton.BorderBrush = Ui.Border;
             drawerCollapseButton.BorderThickness = new Thickness(1, 1, 0, 1);
             drawerCollapseButton.Template = DrawerHandleTemplate();
+            MagneticMotion.Attach(drawerCollapseButton, UiMotion.MotionTokens.DrawerHandleMagneticMax);
+            drawerCollapseButton.PreviewMouseLeftButtonDown += (s, e) => UiMotion.Press(drawerCollapseButton, true, UiMotion.MotionTokens.HandlePressedScale);
             // Follow the existing drawer entrance, without starting a second animation.
             drawerCollapseButton.SetBinding(UIElement.RenderTransformProperty, new System.Windows.Data.Binding("RenderTransform") { Source = drawer });
             drawerCollapseButton.SetBinding(UIElement.OpacityProperty, new System.Windows.Data.Binding("Opacity") { Source = drawer });
+            // New visual children are not Loaded yet. Start the shared entrance
+            // once, after WPF has established visibility and window ownership.
+            RoutedEventHandler enterWhenLoaded = null;
+            enterWhenLoaded = (s, e) => {
+                drawer.Loaded -= enterWhenLoaded;
+                if (!DrawerOpen || !ReferenceEquals(activeDrawer, drawer)) return;
+                Ui.Enter(drawer, true);
+            };
+            drawer.Loaded += enterWhenLoaded;
             activeDrawerHost.Children.Add(drawer); activeDrawerHost.Children.Add(drawerCollapseButton);
-            overlay.Children.Add(activeDrawerHost); overlay.Visibility = Visibility.Visible; Ui.Enter(drawer, true);
+            overlay.Children.Add(activeDrawerHost); overlay.Visibility = Visibility.Visible;
             KeyboardNavigation.SetTabNavigation(activeDrawerHost, KeyboardNavigationMode.Cycle);
             drawer.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
         }
         private static ControlTemplate DrawerHandleTemplate()
         {
             var border = new FrameworkElementFactory(typeof(Border), "HandleChrome");
+            border.SetValue(UIElement.IsHitTestVisibleProperty, false);
             border.SetValue(Border.CornerRadiusProperty, new CornerRadius(6, 0, 0, 6));
             border.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Background") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
             border.SetBinding(Border.BorderBrushProperty, new System.Windows.Data.Binding("BorderBrush") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
@@ -265,7 +281,8 @@ namespace RazerBatteryTray.Desktop
             presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             border.AppendChild(presenter);
-            var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
+            var hitArea = new FrameworkElementFactory(typeof(Grid)); hitArea.SetValue(Panel.BackgroundProperty, Brushes.Transparent); hitArea.AppendChild(border);
+            var template = new ControlTemplate(typeof(Button)) { VisualTree = hitArea };
             var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hover.Setters.Add(new Setter(Border.BackgroundProperty, Ui.Brush("ControlHoverBackground"), "HandleChrome")); template.Triggers.Add(hover);
             var pressed = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
@@ -276,12 +293,33 @@ namespace RazerBatteryTray.Desktop
         }
         private bool InsideDrawer(DependencyObject source)
         {
-            while (source != null)
+            if (source == null || activeDrawerHost == null) return false;
+            var pending = new Stack<DependencyObject>();
+            var visited = new HashSet<DependencyObject>(); pending.Push(source);
+            while (pending.Count > 0)
             {
+                source = pending.Pop();
+                if (source == null || !visited.Add(source)) continue;
                 if (source == activeDrawerHost) return true;
-                source = source is Visual || source is System.Windows.Media.Media3D.Visual3D
-                    ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+                var popup = source as Popup;
+                if (popup != null) pending.Push(popup.PlacementTarget ?? popup.TemplatedParent);
+                var menu = source as ContextMenu;
+                if (menu != null) pending.Push(menu.PlacementTarget);
+                // Popup.Child keeps its logical parent even though its visual parent
+                // is a PopupRoot in another HWND. Follow both, not just the visual tree.
+                pending.Push(LogicalTreeHelper.GetParent(source));
+                if (source is Visual || source is System.Windows.Media.Media3D.Visual3D)
+                    pending.Push(VisualTreeHelper.GetParent(source));
             }
+            return false;
+        }
+        private static bool HasOpenDrawerComboBox(DependencyObject root)
+        {
+            if (root == null) return false;
+            var combo = root as ComboBox;
+            if (combo != null && combo.IsDropDownOpen) return true;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+                if (HasOpenDrawerComboBox(VisualTreeHelper.GetChild(root, i))) return true;
             return false;
         }
         private void ResizeActiveDrawer()

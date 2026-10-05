@@ -43,14 +43,14 @@ namespace RazerBatteryTray.Desktop
             }
             if (message == 0x02A2) CaptionHover(false);
             if (message == 0x00A1 && wparam.ToInt64() == HitMaxButton) {
-                captionPressed = true; SetCapture(hwnd); UiMotion.Press((ScaleTransform)maximizeButton.RenderTransform, true); handled = true;
+                captionPressed = true; SetCapture(hwnd); UiMotion.Press(maximizeButton, true); handled = true;
             }
             if (captionPressed && (message == 0x00A2 || message == 0x0202)) {
                 NativePoint point; bool click = GetCursorPos(out point) && InMaximizeButton(new Point(point.X, point.Y));
-                captionPressed = false; ReleaseCapture(); UiMotion.Press((ScaleTransform)maximizeButton.RenderTransform, false);
+                captionPressed = false; ReleaseCapture(); UiMotion.Press(maximizeButton, false);
                 if (click) MaximizeOrRestore(); handled = true;
             }
-            if (message == 0x0215 || message == 0x001F) { captionPressed = false; if (maximizeButton != null) UiMotion.Press((ScaleTransform)maximizeButton.RenderTransform, false); CaptionHover(false); }
+            if (message == 0x0215 || message == 0x001F) { captionPressed = false; if (maximizeButton != null) UiMotion.Press(maximizeButton, false); CaptionHover(false); }
             return IntPtr.Zero;
         }
     }

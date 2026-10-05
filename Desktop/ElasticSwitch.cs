@@ -52,20 +52,20 @@ namespace RazerBatteryTray.Desktop
         private static void Press(CheckBox c, bool down)
         {
             var scale = Part<ScaleTransform>(c, "DotScale"); if (scale == null || !c.IsEnabled) return;
-            double from = scale.ScaleX, to = down && Ui.Motion ? 1.12 : 1;
-            UiMotion.To(scale, ScaleTransform.ScaleXProperty, to, UiMotion.Fast, from);
+            double to = down && Ui.Motion ? 1.10 : 1;
+            UiMotion.SpringTo(c, scale, ScaleTransform.ScaleXProperty, to, SpringPreset.Snappy, rest: 1);
+            UiMotion.SpringTo(c, scale, ScaleTransform.ScaleYProperty, to, SpringPreset.Snappy, rest: 1);
         }
         private static void Update(CheckBox c, bool animate)
         {
             var move = Part<TranslateTransform>(c, "DotMove"); var track = Part<Border>(c, "Toggle"); var dot = Part<Ellipse>(c, "Dot");
             if (move == null || track == null || dot == null) return;
-            bool on = c.IsChecked == true; double from = move.X, target = on ? 18 : 0;
+            bool on = c.IsChecked == true; double target = on ? 18 : 0;
             var old = track.Background as SolidColorBrush; Color initial = old == null ? Colors.Gray : old.Color;
             Color final = ((SolidColorBrush)(on ? Ui.Accent : Ui.Brush("ToggleOff"))).Color;
-            move.BeginAnimation(TranslateTransform.XProperty, null); move.X = target;
             var fill = new SolidColorBrush(final); track.Background = fill; dot.Fill = on ? Ui.Ink : Ui.Brush("ToggleThumb");
+            UiMotion.SpringTo(c, move, TranslateTransform.XProperty, target, SpringPreset.Snappy, animate: animate);
             if (!animate || !Ui.Motion || !c.IsLoaded || !c.IsVisible) { Press(c, false); return; }
-            UiMotion.To(move, TranslateTransform.XProperty, target, UiMotion.Normal, from);
             UiMotion.ColorTo(fill, initial, final);
         }
     }

@@ -2,15 +2,15 @@
 
 面向部分雷蛇鼠标的 Windows 桌面工具：查看电量、调整 DPI 与回报率，编辑和录制本地宏，再把它们绑定到按键或滚轮。
 
-**当前源码：v1.2.7** · Windows x64 · C# / WPF · .NET Framework 4.8 · [MIT License](LICENSE)
+**当前版本：v1.2.8** · Windows x64 · C# / WPF · .NET Framework 4.8 · [MIT License](LICENSE)
 
-> [最新公开下载 v1.2.7](https://github.com/a010200/LeiyunLite/releases/tag/v1.2.7) · [v1.2.7 发布说明](docs/RELEASE-v1.2.7.md) · [安装与自动更新](docs/INSTALLING.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/a010200/LeiyunLite/issues)
+> [v1.2.8 发布说明](docs/RELEASE-v1.2.8.md) · [最新公开下载 v1.2.8](https://github.com/a010200/LeiyunLite/releases/tag/v1.2.8) · [安装与自动更新](docs/INSTALLING.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/a010200/LeiyunLite/issues)
 
 | 下载 | 适合谁 |
 |---|---|
-| [安装版 EXE](https://github.com/a010200/LeiyunLite/releases/download/v1.2.7/LeiyunLite-v1.2.7-Setup-x64.exe) | 希望有快捷方式、卸载入口和应用内安装更新 |
-| [便携版 ZIP](https://github.com/a010200/LeiyunLite/releases/download/v1.2.7/LeiyunLite-v1.2.7-win-x64.zip) | 不安装，完整解压后直接运行；升级时手动替换程序 |
-| [SHA256 校验文件](https://github.com/a010200/LeiyunLite/releases/download/v1.2.7/SHA256SUMS.txt) | 核对下载文件完整性 |
+| [安装版 EXE](https://github.com/a010200/LeiyunLite/releases/download/v1.2.8/LeiyunLite-v1.2.8-Setup-x64.exe) | 希望有快捷方式、卸载入口和应用内安装更新 |
+| [便携版 ZIP](https://github.com/a010200/LeiyunLite/releases/download/v1.2.8/LeiyunLite-v1.2.8-win-x64.zip) | 不安装，完整解压后直接运行；升级时手动替换程序 |
+| [SHA256 校验文件](https://github.com/a010200/LeiyunLite/releases/download/v1.2.8/SHA256SUMS.txt) | 核对下载文件完整性 |
 
 `update-x64.zip` 和 `update.json` 是供安装版自动更新使用的附件，不是便携包。GitHub 的 `Source code` 是源码，不是可以直接运行的软件。
 
@@ -23,7 +23,7 @@
 | 功能 | 当前范围 |
 |---|---|
 | 设备状态 | 查看型号、电量、充电与连接状态；支持缓存读数、手动刷新、低电量提醒 |
-| 旋转校正 | SE 随附接收器的已验证设备版本可应用角度；真实读回，失败尝试恢复，其他连接只预览 |
+| 旋转校正 | SE 已验证的随附接收器和有线控制接口可应用角度；真实读回，失败尝试恢复，其他接口只预览 |
 | DPI 与回报率 | DPI 滑条和数值输入；按已识别设备的能力配置显示回报率，写入后读回核对 |
 | 托盘 | 左键立即打开型号、电量、DPI 与回报率卡片；右键打开主界面、宏、设置，暂停绑定、停止宏或退出 |
 | 宏编辑 | 延迟、键盘、鼠标按键/竖向滚轮、调用宏、启动程序/网址、运行命令、文本、有限次数循环 |
@@ -53,7 +53,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 运行环境：**Windows 10/11 x64，.NET Framework 4.8**。本轮验证环境是 Windows 10 x64；Windows 11、多显示器和混合缩放仍需进一步实机验证。
 
 1. 从上方选择安装版或便携版。若旧版仍在运行，先保存宏草稿、停止录制/播放，再从托盘菜单选择“退出”。
-2. **安装版**：运行 `LeiyunLite-v1.2.7-Setup-x64.exe`，之后使用安装生成的快捷方式。**便携版**：完整解压 `LeiyunLite-v1.2.7-win-x64.zip` 到新目录，再运行 `LeiyunLite.Desktop.exe`。两种版本不要同时运行。安装目录的 `LeiyunLite.exe` 是新的固定启动入口，不是上游旧软件。
+2. **安装版**：运行 `LeiyunLite-v1.2.8-Setup-x64.exe`，之后使用安装生成的快捷方式。**便携版**：完整解压 `LeiyunLite-v1.2.8-win-x64.zip` 到新目录，再运行 `LeiyunLite.Desktop.exe`。两种版本不要同时运行。安装目录的 `LeiyunLite.exe` 是新的固定启动入口，不是上游旧软件。
 3. 在“设备”页查看状态。型号未明确识别时，不会开放未经确认的 DPI/回报率写入。
 4. v1.1.0 及更早便携版不会自动变成安装版，需要手动运行一次安装程序；个人宏和设置沿用原位置。便携版更换路径后，如需自启动，请在设置中重新启用“开机自启动”。
 
@@ -69,15 +69,13 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 
 安全预览使用模拟设备，不读写鼠标、不监听键鼠录制、不执行宏输入或命令、不保存设置。**它只能看界面，不能用于测试真实录制或硬件控制。**
 
-### v1.2.7
+### v1.2.8
 
-- 统一托盘菜单和导航图标。
-- 右侧面板支持收起把手、点击遮罩和 Esc 关闭。
-- 减少普通输入处理的内存分配。
-- 改善 GitHub API 限流后的更新检查与恢复提示。
+- 优化按钮、开关、下拉面板和侧边页面的弹性交互，让界面操作更自然顺滑。
+- 改善右侧面板与录制体验，修复弹层交互问题并加入录制前 3→2→1 倒计时提示。
+- 完善 Viper V3 Pro SE 有线旋转校正，修复有线或充电连接下重启后角度显示为 0°、无法应用的问题。
 
-详见[版本说明](docs/RELEASE-v1.2.7.md)和[更新记录](CHANGELOG.md)。
-
+详见[版本说明](docs/RELEASE-v1.2.8.md)和[更新记录](CHANGELOG.md)。Motion 专项的剩余对照与手感验收保留到 v1.2.9，不阻塞本次发布。
 普通启动不显示输入诊断；需要协助排查宏时，正常退出已有实例后使用`LeiyunLite.Desktop.exe --diagnostics`启动。`--demo --diagnostics`仅查看诊断界面，不监听输入。
 
 ## 录制一个宏，再绑定到按键
@@ -109,15 +107,15 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 - 管理员窗口、系统安全桌面、游戏原始输入与反作弊环境不保证兼容，不提供绕过机制。
 - 宏可包含启动程序、网址或运行命令的动作。使用他人提供的宏前，先检查其内容。
 
-当前版本的变化与边界见[v1.2.7 说明](docs/RELEASE-v1.2.7.md)。[v1.1.0 使用与升级说明](docs/RELEASE-v1.1.0.md)及 R3/R4/R5 文档保留为历史记录。
+当前版本的变化与边界见[v1.2.8 说明](docs/RELEASE-v1.2.8.md)。[v1.1.0 使用与升级说明](docs/RELEASE-v1.1.0.md)及 R3/R4/R5 文档保留为历史记录。
 
 ### 旋转校正
 
-旋转校正最初在 v1.2.1 完成实机验证，当前 v1.2.7 继续沿用相同的已验证写入边界：**Viper V3 Pro SE 随附接收器（1532:00DF，HID 设备版本字段 0100，91 字节控制接口）**。0100 是设备描述符版本，不是独立读取的固件版本。其他 PID、设备版本或报告长度保持禁用。
+旋转校正最初在 v1.2.1 验证 SE 随附接收器；v1.2.8 新增同一设备的已验证有线控制接口：**Viper V3 Pro SE（1532:00DE / 00DF，HID 设备版本字段 0100，91 字节控制接口，正确接口用途）**。有线与双连接的普通启动、重启和真实读回已验收。0100 是设备描述符版本，不是独立读取的固件版本。其他 PID、设备版本、接口用途或报告长度保持禁用。
 
 滑块只改变预览，点击“应用到鼠标”后才写入。输入框可直接键入 −44°～44° 的整数；设备当前角度独立显示。设置会绑定当前设备实例，执行“读原值 → 写目标 → 读回”，失败时尝试恢复原值并确认；无法确认恢复时明确提示。“撤销预览”只撤销未应用的编辑，不改设备。校准向导仍使用系统指针轨迹，只提供建议。
 
-在官方雷云主程序退出后，0°、+10°、−10° 各三次手动直线试验的 Raw Input 平均方向分别为 8.99°、20.75°、0.58°，正负组差 20.17°；九次设置读回与原值恢复均确认。用户确认效果后批准发布。测试机仍有官方后台服务和驱动，**不宣称完全脱离厂商驱动**。重连/休眠、游戏、其他连接及边界角度未完成实机验收；详见 [旋转验证记录](docs/ROTATION-VALIDATION.md)。
+在官方雷云主程序退出后，0°、+10°、−10° 各三次手动直线试验的 Raw Input 平均方向分别为 8.99°、20.75°、0.58°，正负组差 20.17°；九次设置读回与原值恢复均确认。用户确认效果后批准发布。测试机仍有官方后台服务和驱动，**不宣称完全脱离厂商驱动**。此段为 v1.2.1 历史试验；休眠、游戏、其他型号及边界角度仍未完整验收。详见 [历史旋转记录](docs/ROTATION-VALIDATION.md)及 [v1.2.8 说明](docs/RELEASE-v1.2.8.md)。
 
 ## 安装与更新
 
@@ -154,7 +152,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 
 ## 从源码构建
 
-在当前源码根目录打开 PowerShell；当前标签为 [v1.2.7](https://github.com/a010200/LeiyunLite/tree/v1.2.7)。项目入口为 `LeiyunLite.Desktop.csproj`；解决方案保留兼容文件名 `LeiyunLite.R3.sln`，但构建的是当前目录源码，并非固定 R3。
+在当前源码根目录打开 PowerShell；当前标签为 [v1.2.8](https://github.com/a010200/LeiyunLite/tree/v1.2.8)。项目入口为 `LeiyunLite.Desktop.csproj`；解决方案保留兼容文件名 `LeiyunLite.R3.sln`，但构建的是当前目录源码，并非固定 R3。
 
 ### 方式一：使用现有 .NET Framework 编译器
 
@@ -164,7 +162,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 
 脚本使用 Windows 上已有的64位 .NET Framework 编译器和 WPF 程序集，并从 `Tools/LiteIconBuilder.cs` 生成图标，不需要下载第三方 NuGet 包。要求相应编译器和程序集实际存在；运行环境仍需 .NET Framework 4.8。
 
-产物：`bin\Desktop1.2.7\LeiyunLite.Desktop.exe`。
+产物：`bin\Desktop1.2.8\LeiyunLite.Desktop.exe`。
 
 ### 方式二：MSBuild / VS Code 开发构建
 
@@ -174,7 +172,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-VSCode.ps1
 ```
 
-产物：`bin\VSCode1.2.7\LeiyunLite.Desktop.exe`。在 VS Code 打开仓库内的 **`LeiyunLite.code-workspace`**，可按 **Ctrl + Shift + B** 执行 `v1.2.7: Build`。
+产物：`bin\VSCode1.2.8\LeiyunLite.Desktop.exe`。在 VS Code 打开仓库内的 **`LeiyunLite.code-workspace`**，可按 **Ctrl + Shift + B** 执行 `v1.2.8: Build`。
 
 > 公开工作区不含维护者的本机路径或编辑器缓存。编辑器代码分析与编译是两回事；环境设置及常见问题见 [构建与开发](docs/BUILDING.md)。F5 断点调试尚未配置。
 
@@ -186,7 +184,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1 -Tes
 
 测试会显示独立窗口；部分回归测试向自己的测试文本框发送输入并使用临时注册表键，运行时请避免抢焦点。不加 `-Hardware` 不进行实机读取；硬件测试为可选只读检查，不代表实机写入已通过验证。
 
-当前版本的修复与验证边界见[v1.2.7 发布说明](docs/RELEASE-v1.2.7.md)；各版本记录见[更新记录](CHANGELOG.md)。测试结果不代表所有设备、游戏或输入环境均已通过实机验收。
+当前版本的修复与验证边界见[v1.2.8 说明](docs/RELEASE-v1.2.8.md)；各版本记录见[更新记录](CHANGELOG.md)。测试结果不代表所有设备、游戏或输入环境均已通过实机验收。
 
 ## 源码结构
 
@@ -206,7 +204,7 @@ docs/          各阶段使用说明与验证记录
 screenshots/   界面配图
 ```
 
-历史说明只代表对应版本；当前源码状态以本页和 `CHANGELOG.md` 为准，v1.2.7状态见 `docs/RELEASE-v1.2.7.md`。旧 WinForms UI 与旧构建入口已移除；当前软件仅构建 `LeiyunLite.Desktop.csproj`，使用 `Desktop/` 中的 WPF 界面。
+历史说明只代表对应版本；当前源码状态以本页和 `CHANGELOG.md` 为准，v1.2.8 状态见 `docs/RELEASE-v1.2.8.md`，公开 v1.2.7 记录保持不变。旧 WinForms UI 与旧构建入口已移除；当前软件仅构建 `LeiyunLite.Desktop.csproj`，使用 `Desktop/` 中的 WPF 界面。
 
 这个独立仓库从 **v1.2.1 的代码快照**开始记录，不导入旧仓库的提交历史。此前版本已另行留档，迁移不改变当时的程序包、更新地址或设备支持范围。前期界面评审保留在 [UI-REDESIGN-FINAL.md](UI-REDESIGN-FINAL.md)和[UI-VISUAL-RECALL-REVIEW.md](UI-VISUAL-RECALL-REVIEW.md)，历史配图来源见 [screenshots/README.md](screenshots/README.md)。
 

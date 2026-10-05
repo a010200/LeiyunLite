@@ -45,13 +45,16 @@ namespace RazerBatteryTray.Desktop
                 var surface = combo.Template.FindName("DropSurface", combo) as Border ?? Find<Border>(popup.Child, "DropSurface");
                 if (surface == null) return;
                 // Never mutate a shared template Freezable.
-                var move = new TranslateTransform(); surface.RenderTransform = move;
+                var move = UiMotion.Transform(surface).Entry;
+                // Popup has a separate HWND/visual tree; lifecycle still belongs
+                // to the ComboBox's app window, including deactivation.
+                SpringMotion.WindowContext(surface, combo);
                 surface.BeginAnimation(UIElement.OpacityProperty, null); surface.Opacity = 1;
                 if (Ui.Motion)
                 {
                     surface.UpdateLayout();
                     bool above = PresentationSource.FromVisual(surface) != null && PresentationSource.FromVisual(combo) != null && surface.PointToScreen(new Point()).Y < combo.PointToScreen(new Point()).Y;
-                    UiMotion.To(move, TranslateTransform.YProperty, 0, UiMotion.Normal, above ? 5 : -5);
+                    UiMotion.SpringTo(surface, move, TranslateTransform.YProperty, 0, SpringPreset.Smooth, above ? UiMotion.MotionTokens.DropdownOffset : -UiMotion.MotionTokens.DropdownOffset, rest: 0);
                     UiMotion.Fade(surface, .35, UiMotion.Fast);
                 }
                 Arrow(combo, true);
@@ -65,9 +68,9 @@ namespace RazerBatteryTray.Desktop
         private static void Arrow(ComboBox combo, bool open)
         {
             var arrow = Find<FrameworkElement>(combo, "DropArrow"); if (arrow == null) return;
-            var old = arrow.RenderTransform as RotateTransform; double from = old == null ? 0 : old.Angle;
-            var rotate = new RotateTransform(open ? 180 : 0); arrow.RenderTransformOrigin = new Point(.5, .5); arrow.RenderTransform = rotate;
-            UiMotion.To(rotate, RotateTransform.AngleProperty, rotate.Angle, UiMotion.Normal, from);
+            var rotate = arrow.RenderTransform as RotateTransform;
+            if (rotate == null || rotate.IsFrozen) { rotate = new RotateTransform(); arrow.RenderTransformOrigin = new Point(.5, .5); arrow.RenderTransform = rotate; }
+            UiMotion.SpringTo(combo, rotate, RotateTransform.AngleProperty, open ? 180 : 0, SpringPreset.Snappy);
         }
     }
 }

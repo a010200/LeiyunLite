@@ -81,8 +81,9 @@ namespace RazerBatteryTray.Desktop
         }
         internal void EndRecording(bool cancel)
         {
-            if (!recording) return;
+            if (!recording) { UpdateCountdownVisual(); return; }
             bool wasCountdown = countingDown; recording = countingDown = false; recordingClock.Stop();
+            UpdateCountdownVisual();
             var recorder = shell.Macros.Recorder;
             var result = shell.Macros.EndRecording();
             string reason = recorder == null ? "" : recorder.Reason;
@@ -99,6 +100,7 @@ namespace RazerBatteryTray.Desktop
         }
         private void UpdateRecordingControls()
         {
+            UpdateCountdownVisual();
             if (testButton == null || workspace == null) return;
             bool running = shell.Macros != null && shell.Macros.IsRunning;
             testButton.IsEnabled = !recording && !running && Selected != null && Selected.Steps.Count > 0;

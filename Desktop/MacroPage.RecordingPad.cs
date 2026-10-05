@@ -12,6 +12,9 @@ namespace RazerBatteryTray.Desktop
         private Border recordingPad;
         private ListBox recordedActions;
         private TextBlock padHint;
+        private Grid countdownOverlay;
+        private TextBlock countdownNumber, countdownCaption;
+        private int lastCountdownNumber = -1;
         private bool areaRecording = true;
         private int renderedCount = -1;
         private FrameworkElement BuildRecordingPad()
@@ -19,7 +22,15 @@ namespace RazerBatteryTray.Desktop
             padHint = Ui.Text("", 13, Ui.Muted);
             recordedActions = new ListBox { IsHitTestVisible = false, Focusable = false };
             var dock = new DockPanel(); DockPanel.SetDock(padHint, Dock.Top); dock.Children.Add(padHint); dock.Children.Add(recordedActions);
-            recordingPad = new Border { Background = Ui.Brush("#191919"), BorderBrush = Ui.Accent, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Focusable = true, Child = dock, Visibility = Visibility.Collapsed };
+            var content = new Grid(); content.Children.Add(dock);
+            recordingPad = new Border { Background = Ui.Brush("#191919"), BorderBrush = Ui.Accent, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Focusable = true, Child = content, Visibility = Visibility.Collapsed };
+            countdownNumber = Ui.Text("", 72, Ui.Accent); countdownNumber.FontWeight = FontWeights.SemiBold;
+            countdownNumber.TextAlignment = TextAlignment.Center;
+            countdownCaption = Ui.Text("", 14, Ui.Muted); countdownCaption.TextAlignment = TextAlignment.Center;
+            var countdown = Ui.Stack(countdownNumber, countdownCaption);
+            countdown.HorizontalAlignment = HorizontalAlignment.Center; countdown.VerticalAlignment = VerticalAlignment.Center;
+            countdownOverlay = new Grid { Background = recordingPad.Background, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+            countdownOverlay.Children.Add(countdown); content.Children.Add(countdownOverlay);
             recordingPad.PreviewMouseDown += (s, e) => { recordingPad.Focus(); UpdateRecordingRegion(); e.Handled = true; };
             recordingPad.PreviewMouseUp += (s, e) => e.Handled = true;
             recordingPad.PreviewMouseWheel += (s, e) => e.Handled = true;
@@ -31,6 +42,16 @@ namespace RazerBatteryTray.Desktop
             shell.Deactivated += RecordingWindowChanged;
             shell.LocationChanged += RecordingWindowChanged;
             return recordingPad;
+        }
+        private void UpdateCountdownVisual()
+        {
+            if (countdownOverlay == null) return;
+            bool show = recording && countingDown && areaRecording;
+            countdownOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (!show) { lastCountdownNumber = -1; return; }
+            int seconds = Math.Max(1, 3 - (int)recordingClock.Elapsed.TotalSeconds);
+            if (seconds != lastCountdownNumber) { countdownNumber.Text = seconds.ToString(); lastCountdownNumber = seconds; }
+            countdownCaption.Text = Ui.T("准备录制", "Get ready");
         }
         private void RecordingWindowChanged(object sender, EventArgs args) { UpdateRecordingRegion(); }
         private void UpdateRecordingRegion()

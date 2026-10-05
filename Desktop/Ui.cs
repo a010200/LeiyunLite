@@ -56,15 +56,15 @@ namespace RazerBatteryTray.Desktop
             var b = new Button { Content = title, Margin = new Thickness(0, 0, 8, 8) };
             if (primary) { b.SetResourceReference(FrameworkElement.StyleProperty, "PrimaryButton"); }
             b.Click += (s, e) => click();
-            var scale = new ScaleTransform(1, 1); b.RenderTransform = scale; b.RenderTransformOrigin = new Point(0.5, 0.5);
-            b.PreviewMouseLeftButtonDown += (s, e) => UiMotion.Press(scale, true);
-            b.PreviewMouseLeftButtonUp += (s, e) => UiMotion.Press(scale, false);
-            b.MouseLeave += (s, e) => UiMotion.Press(scale, false);
-            b.LostMouseCapture += (s, e) => UiMotion.Press(scale, false);
-            b.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Space || e.Key == System.Windows.Input.Key.Enter) UiMotion.Press(scale, true); };
-            b.PreviewKeyUp += (s, e) => { if (e.Key == System.Windows.Input.Key.Space || e.Key == System.Windows.Input.Key.Enter) UiMotion.Press(scale, false); };
-            b.LostKeyboardFocus += (s, e) => UiMotion.Press(scale, false);
+            b.PreviewMouseLeftButtonDown += (s, e) => UiMotion.Press(b, true);
+            b.PreviewMouseLeftButtonUp += (s, e) => UiMotion.Press(b, false);
+            b.MouseLeave += (s, e) => UiMotion.Press(b, false);
+            b.LostMouseCapture += (s, e) => UiMotion.Press(b, false);
+            b.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Space || e.Key == System.Windows.Input.Key.Enter) UiMotion.Press(b, true); };
+            b.PreviewKeyUp += (s, e) => { if (e.Key == System.Windows.Input.Key.Space || e.Key == System.Windows.Input.Key.Enter) UiMotion.Press(b, false); };
+            b.LostKeyboardFocus += (s, e) => UiMotion.Press(b, false);
             b.IsVisibleChanged += (s, e) => { if (!b.IsVisible) UiMotion.Stop(b); };
+            if (primary) MagneticMotion.Attach(b, UiMotion.MotionTokens.PrimaryMagneticMax);
             return b;
         }
         public static StackPanel Stack(params UIElement[] items) { var p = new StackPanel(); foreach (var item in items) p.Children.Add(item); return p; }

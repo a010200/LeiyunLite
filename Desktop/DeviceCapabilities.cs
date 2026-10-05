@@ -29,5 +29,22 @@ namespace RazerBatteryTray.Desktop
         public bool AcceptsDpi(int value) { return Known && value >= MinimumDpi && value <= MaximumDpi; }
         public bool AcceptsRate(int value) { return Known && Array.IndexOf(Rates, value) >= 0; }
         public bool AcceptsRotation(int value) { return RotationProtocolCandidate && value >= RazerProtocol.MinimumRotation && value <= RazerProtocol.MaximumRotation; }
+        internal static DeviceCapabilities For(HidDescriptor descriptor)
+        {
+            var c = For(descriptor == null ? 0 : descriptor.ProductId);
+            c.RotationProtocolCandidate = RazerProtocolProfile.SupportsRotation(descriptor);
+            return c;
+        }
+        internal static DeviceCapabilities For(MouseBatteryInfo reading)
+        {
+            var c = For(reading == null ? 0 : reading.ProductId);
+            // Probe mints these flags only after the shared descriptor gate and
+            // a successful live GET. The command path rechecks its pinned descriptor.
+            c.RotationProtocolCandidate = reading != null &&
+                (reading.ProductId == 0x00DE || reading.ProductId == 0x00DF) &&
+                reading.ProtocolStatus == DeviceProtocolStatus.Ready && reading.RotationKnown &&
+                reading.IsRotationWriteSupported && reading.IsRotationHardwareVerified;
+            return c;
+        }
     }
 }

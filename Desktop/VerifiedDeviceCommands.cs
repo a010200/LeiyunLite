@@ -34,7 +34,7 @@ namespace RazerBatteryTray
         {
             angle = 0;
             lock (hidLock) {
-                var p = selected == null ? null : RazerProtocolProfile.For(selected.ProductId);
+                var p = RazerProtocolProfile.For(selected);
                 if (p == null || !p.RotationReadVerified || !RazerProtocolProfile.SupportsRotation(selected) || string.IsNullOrEmpty(expectedKey)) return false;
                 bool ok = false; int value = 0;
                 transport.Visit(device => {
@@ -54,9 +54,10 @@ namespace RazerBatteryTray
         private RotationWriteResult SetRotationCore(int pid, int angle, string expectedKey, bool research)
         {
             var result = new RotationWriteResult { Error = "unsupported" };
-            if (!DeviceCapabilities.For(pid).AcceptsRotation(angle) || string.IsNullOrEmpty(expectedKey)) return result;
+            if (string.IsNullOrEmpty(expectedKey)) return result;
             lock (hidLock) {
-                var p = selected == null ? null : RazerProtocolProfile.For(selected.ProductId);
+                if (selected == null || selected.ProductId != pid || !DeviceCapabilities.For(selected).AcceptsRotation(angle)) return result;
+                var p = RazerProtocolProfile.For(selected);
                 if (p == null || !p.RotationReadVerified || !p.RotationWriteCandidate || !RazerProtocolProfile.SupportsRotation(selected)) return result;
                 if (!research && !p.RotationWriteVerified) return result;
                 transport.Visit(device => {

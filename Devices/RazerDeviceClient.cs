@@ -61,7 +61,7 @@ namespace RazerBatteryTray
                 DeviceKind = identity.Kind, IsConnected = true,
                 IsDonglePresent = identity.Kind == DeviceKind.DedicatedReceiver || identity.Kind == DeviceKind.GenericReceiver,
                 ProtocolStatus = DeviceProtocolStatus.IdentityOnly };
-            var p = RazerProtocolProfile.For(d.ProductId);
+            var p = RazerProtocolProfile.For(d);
             if (p == null || !d.CanProbe || identity.Kind == DeviceKind.GenericReceiver || identity.Kind == DeviceKind.Unknown) return r;
             r.ProtocolStatus = DeviceProtocolStatus.PresentUnresponsive;
             int dpi, stage; int[] stages; int o = Offset(device);

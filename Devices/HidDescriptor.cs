@@ -31,6 +31,18 @@ namespace RazerBatteryTray
                 RotationWriteVerified = pid == 0x00DF };
         }
         internal static bool SupportsRotation(HidDescriptor d)
-        { return d != null && d.IsRazer && d.ProductId == 0x00DF && d.Version == 0x0100 && d.ReportLength == 91 && d.CanProbe; }
+        { return d != null && d.IsRazer && (d.ProductId == 0x00DE || d.ProductId == 0x00DF) &&
+            d.Version == 0x0100 && d.ReportLength == 91 && d.UsagePage == 1 && d.Usage == 2 && d.CanProbe; }
+        internal static RazerProtocolProfile For(HidDescriptor d)
+        {
+            var p = d == null ? null : For(d.ProductId);
+            if (p != null) {
+                // Stage 2A: 00DE target/readback/restore and 00DF cross-read passed.
+                // Rotation verification is descriptor-specific, never PID-only.
+                bool verified = SupportsRotation(d);
+                p.RotationReadVerified = p.RotationWriteCandidate = p.RotationWriteVerified = verified;
+            }
+            return p;
+        }
     }
 }

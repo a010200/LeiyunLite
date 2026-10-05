@@ -82,7 +82,7 @@ internal static partial class FullVerification
         public string ProductName { get { return "Full verification fake"; } }
         public int ReportLength { get { return Descriptor.ReportLength; } }
         internal Hid(int length = 91, int pid = 0x00DF, string key = null) {
-            Descriptor = new HidDescriptor { VendorId = 0x1532, ProductId = pid, Version = 0x0100, ReportLength = length, UsagePage = 0xFF00, Path = "fake-" + (key ?? Guid.NewGuid().ToString("N")), ContainerId = key ?? Guid.NewGuid().ToString("N") };
+            Descriptor = new HidDescriptor { VendorId = 0x1532, ProductId = pid, Version = 0x0100, ReportLength = length, UsagePage = 1, Usage = 2, Path = "fake-" + (key ?? Guid.NewGuid().ToString("N")), ContainerId = key ?? Guid.NewGuid().ToString("N") };
         }
         public byte[] Exchange(byte[] q, int delay) {
             Exchanges++; if (Sleeping) return null;

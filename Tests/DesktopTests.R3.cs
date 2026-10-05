@@ -142,16 +142,17 @@ namespace RazerBatteryTray.Desktop
             finally { page.EndRecording(true); controller.Dispose(); typeof(ShellWindow).GetField("Macros", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(window, null); }
             window.Navigate(2); Pump();
             var theme = Descendants<ComboBox>(Field<FrameworkElement[]>(window, "views")[2]).First(c => c.Name == "ThemeSelector");
-            Ui.ReducedMotion = false; theme.IsDropDownOpen = true; PumpFor(30);
+            window.Activate(); Pump(); Ui.ReducedMotion = false; theme.IsDropDownOpen = true; PumpFor(30);
             var popup = (Popup)theme.Template.FindName("PART_Popup", theme);
             var surface = Descendants<Border>(popup.Child).First(b => b.Name == "DropSurface");
-            var transform = (TranslateTransform)surface.RenderTransform;
-            if (SystemParameters.ClientAreaAnimation) Check(transform.HasAnimatedProperties, "Dropdown receives motion clock");
-            PumpFor(250); Check(Math.Abs(transform.Y) < .001 && surface.Opacity == 1, "Dropdown settles without text scaling");
-            theme.IsDropDownOpen = false; Pump(); Check(!transform.HasAnimatedProperties, "Close clears clocks");
+            var transform = UiMotion.Transform(surface).Entry;
+            var spring = SpringMotion.Get(surface, transform, TranslateTransform.YProperty, SpringPreset.Smooth, 0);
+            if (SystemParameters.ClientAreaAnimation) Check(spring.Active, "Dropdown receives an active spring");
+            PumpFor(1200); Check(Math.Abs(transform.Y) < .001 && surface.Opacity == 1 && !spring.Active, "Dropdown settles without text scaling");
+            theme.IsDropDownOpen = false; Pump(); Check(!spring.Active && transform.Y == 0 && !surface.HasAnimatedProperties, "Close clears spring and opacity clocks");
             for (int i = 0; i < 8; i++) { theme.IsDropDownOpen = true; Pump(); theme.IsDropDownOpen = false; Pump(); }
             Ui.ReducedMotion = true; theme.IsDropDownOpen = true; Pump();
-            Check(!((TranslateTransform)surface.RenderTransform).HasAnimatedProperties, "Reduced motion opens instantly"); theme.IsDropDownOpen = false;
+            Check(!spring.Active && transform.Y == 0 && surface.Opacity == 1 && !surface.HasAnimatedProperties, "Reduced motion opens instantly"); theme.IsDropDownOpen = false;
             var bottomCombo = Ui.Combo(new[] { "One", "Two", "Three", "Four" });
             var host = new Window { Width = 260, Height = 90, Left = 40, Top = SystemParameters.WorkArea.Bottom - 90, Content = bottomCombo, ShowInTaskbar = false };
             host.Show(); Pump(); Ui.ReducedMotion = false; bottomCombo.IsDropDownOpen = true; PumpFor(30);

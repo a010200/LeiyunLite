@@ -19,10 +19,12 @@ namespace RazerBatteryTray.Desktop
         private static int passed, failed;
         private static readonly List<string> results = new List<string>();
         private static string artifacts;
+        private static bool uiOnly;
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
         [STAThread]
-        private static int Main()
+        private static int Main(string[] args)
         {
+            uiOnly = args.Length == 1 && args[0] == "--ui-only";
             artifacts = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "artifacts"); Directory.CreateDirectory(artifacts);
             Test(AppVersion.DisplayName + " assembly, display and update version consistency", VersionMetadata);
             Test("Update handoff blocks draft, recording, running macros and failed safety saves", UpdateHandoffSafety);
@@ -50,8 +52,9 @@ namespace RazerBatteryTray.Desktop
             Test("R5 instance cache isolation and stale write target rejection", InstanceSafety);
             Test("R5 area recording filters, pause balancing and live snapshots", AreaRecording);
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            DesktopApp.LoadTheme(app);
             Test("Silent startup creates its message HWND without showing the main window", () => {
-                DesktopApp.LoadTheme(app); var hidden = new ShellWindow(true);
+                var hidden = new ShellWindow(true);
                 IntPtr handle = new WindowInteropHelper(hidden).EnsureHandle();
                 Check(handle != IntPtr.Zero && !hidden.IsVisible && !IsWindowVisible(handle), "Hidden startup revealed its main HWND");
                 hidden.ClosePreview();
@@ -101,7 +104,7 @@ namespace RazerBatteryTray.Desktop
             Console.WriteLine(results.Last()); File.WriteAllLines(Path.Combine(artifacts, "desktop-results.txt"), results);
             return failed == 0 ? 0 : 1;
         }
-        private static void Test(string name, Action action) { try { action(); passed++; results.Add("PASS: " + name); } catch (Exception ex) { failed++; results.Add("FAIL: " + name + "\n" + ex); } Console.WriteLine(results.Last()); }
+        private static void Test(string name, Action action) { if (uiOnly && !name.StartsWith("WPF theme loads,")) return; try { action(); passed++; results.Add("PASS: " + name); } catch (Exception ex) { failed++; results.Add("FAIL: " + name + "\n" + ex); } Console.WriteLine(results.Last()); }
         private static void Check(bool value, string text) { if (!value) throw new Exception(text); }
         private static T Field<T>(object value, string name) { return (T)value.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(value); }
         private static void Invoke(object value, string name, params object[] args) { value.GetType().GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(value, args); }
@@ -253,7 +256,7 @@ namespace RazerBatteryTray.Desktop
             Check(!DeviceCapabilities.For(0x1234).AcceptsDpi(800), "Unknown DPI");
             Check(!DeviceCapabilities.For(0x1234).AcceptsRate(1000), "Unknown rate");
             Check(se.AcceptsRotation(-44) && se.AcceptsRotation(44) && !se.AcceptsRotation(45), "00DF rotation bounds");
-            Check(!DeviceCapabilities.For(0x00DE).AcceptsRotation(0) && !DeviceCapabilities.For(0x00C1).AcceptsRotation(0), "Unverified connections cannot write rotation");
+            Check(!DeviceCapabilities.For(0x00DE).AcceptsRotation(0) && !DeviceCapabilities.For(0x00C1).AcceptsRotation(0), "PID alone cannot grant the new wired rotation capability");
         }
         private static void Dpi()
         {
@@ -345,7 +348,7 @@ namespace RazerBatteryTray.Desktop
             foreach (int mode in new[] { 0, 1, 2 }) {
                 var fake = new DeviceFake(mode == 2 ? 90 : 91);
                 if (mode == 0) fake.Descriptor.Version = 0x0101;
-                if (mode == 1) fake.Descriptor.ProductId = 0x00DE;
+                if (mode == 1) { fake.Descriptor.ProductId = 0x00DE; fake.Descriptor.Usage = 1; }
                 var client = new RazerDeviceClient(new Transport(fake), new HardwareCacheStore(null));
                 var reading = client.QueryRazerDeviceInfo();
                 Check(!reading.IsRotationWriteSupported && !client.SetRotationVerified(fake.ProductId, 10, reading.DeviceKey).WriteAttempted && fake.Writes == 0, "Unverified revision/connection/report length denied");
@@ -379,7 +382,7 @@ namespace RazerBatteryTray.Desktop
             public string ProductName { get { return "Test SE"; } }
             public int ReportLength { get; private set; }
             public int[] Stages = { 400, 800, 1600 }; public int Writes, Reads, Rotation = -8; public bool IgnoreWrites, WrongEcho; private byte rate = 1;
-            public DeviceFake(int length) { ReportLength = length; Descriptor = new HidDescriptor { VendorId = 0x1532, ProductId = 0x00DF, Version = 0x0100, ReportLength = length, UsagePage = 0xFF00, Path = Guid.NewGuid().ToString(), ContainerId = Guid.NewGuid().ToString() }; }
+            public DeviceFake(int length) { ReportLength = length; Descriptor = new HidDescriptor { VendorId = 0x1532, ProductId = 0x00DF, Version = 0x0100, ReportLength = length, UsagePage = 1, Usage = 2, Path = Guid.NewGuid().ToString(), ContainerId = Guid.NewGuid().ToString() }; }
             public byte[] Exchange(byte[] request, int delay)
             {
                 Reads++; int o = ReportLength == 91 ? 1 : 0; var r = (byte[])request.Clone(); r[o] = 2; byte cls = r[o + 6], cmd = r[o + 7];

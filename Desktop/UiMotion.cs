@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 
@@ -44,16 +46,58 @@ namespace RazerBatteryTray.Desktop
             brush.BeginAnimation(SolidColorBrush.ColorProperty, null); brush.Color = final; Remember(brush, SolidColorBrush.ColorProperty, final);
             if (Ui.Motion) brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(from, final, TimeSpan.FromMilliseconds(Fast)) { FillBehavior = FillBehavior.Stop }, HandoffBehavior.SnapshotAndReplace);
         }
-        internal static void Press(ScaleTransform scale, bool pressed) { To(scale, ScaleTransform.ScaleXProperty, pressed ? .98 : 1, Fast); To(scale, ScaleTransform.ScaleYProperty, pressed ? .98 : 1, Fast); }
+        internal static class MotionTokens
+        {
+            internal const double ButtonPressedScale = .985, HandlePressedScale = .975;
+            internal const double PrimaryMagneticMax = 2, DrawerHandleMagneticMax = 4;
+            internal const double DrawerEnterOffset = 16, PageEnterOffset = 10, DropdownOffset = 6;
+        }
+        internal sealed class MotionTransform
+        {
+            internal readonly TranslateTransform Entry = new TranslateTransform(), Magnetic = new TranslateTransform();
+            internal readonly ScaleTransform Press = new ScaleTransform(1, 1);
+            internal readonly TransformGroup Group = new TransformGroup();
+            internal MotionTransform(FrameworkElement element)
+            {
+                // Preserve any existing transform; owned channels are never replaced.
+                if (element.RenderTransform != null && !element.RenderTransform.Value.IsIdentity) Group.Children.Add(element.RenderTransform);
+                Group.Children.Add(Press); Group.Children.Add(Magnetic); Group.Children.Add(Entry);
+                element.RenderTransform = Group;
+            }
+        }
+        private static readonly ConditionalWeakTable<FrameworkElement, MotionTransform> transforms = new ConditionalWeakTable<FrameworkElement, MotionTransform>();
+        internal static MotionTransform Transform(FrameworkElement element) { return transforms.GetValue(element, e => new MotionTransform(e)); }
+        internal static void SpringTo(FrameworkElement owner, Animatable target, DependencyProperty property, double final, SpringPreset preset, double? start = null, bool animate = true, double? rest = null)
+        {
+            SpringMotion.To(SpringMotion.Get(owner, target, property, preset, rest), final, start, animate);
+        }
+        internal static FrameworkElement ButtonVisual(Button button)
+        {
+            button.ApplyTemplate();
+            return button.Template == null ? null : button.Template.FindName("Chrome", button) as FrameworkElement ?? button.Template.FindName("HandleChrome", button) as FrameworkElement;
+        }
+        // Compatibility for the existing caption controls; their owner explicitly
+        // stops the transform. Core Button/Toggle paths use owner-bound springs.
+        internal static void Press(ScaleTransform scale, bool pressed) { To(scale, ScaleTransform.ScaleXProperty, pressed ? MotionTokens.ButtonPressedScale : 1, Fast); To(scale, ScaleTransform.ScaleYProperty, pressed ? MotionTokens.ButtonPressedScale : 1, Fast); }
+        internal static void Press(Button button, bool pressed, double scale = MotionTokens.ButtonPressedScale)
+        {
+            var visual = ButtonVisual(button); if (visual == null) return;
+            visual.RenderTransformOrigin = new Point(.5, .5);
+            var parts = Transform(visual);
+            SpringTo(button, parts.Press, ScaleTransform.ScaleXProperty, pressed && Ui.Motion ? scale : 1, SpringPreset.Snappy, rest: 1);
+            SpringTo(button, parts.Press, ScaleTransform.ScaleYProperty, pressed && Ui.Motion ? scale : 1, SpringPreset.Snappy, rest: 1);
+        }
         internal static void Enter(FrameworkElement element, bool drawer = false)
         {
-            Stop(element); var move = new TranslateTransform(); element.RenderTransform = move;
-            To(move, drawer ? TranslateTransform.XProperty : TranslateTransform.YProperty, 0, Slow, drawer ? 8 : 12); Fade(element);
+            var move = Transform(element).Entry;
+            SpringTo(element, move, drawer ? TranslateTransform.XProperty : TranslateTransform.YProperty, 0, SpringPreset.Smooth,
+                drawer ? MotionTokens.DrawerEnterOffset : MotionTokens.PageEnterOffset, rest: 0); Fade(element);
         }
         internal static void MoveIndicator(FrameworkElement element, bool selected) { element.Visibility = selected ? Visibility.Visible : Visibility.Hidden; if (selected) Enter(element); else Stop(element); }
         internal static void PulseOnce(FrameworkElement element) { Fade(element, .55); }
         internal static void Stop(FrameworkElement element)
         {
+            SpringMotion.Stop(element);
             bool hadFade = fades.Exists(w => ReferenceEquals(w.Target.Target, element));
             fades.RemoveAll(w => !w.Target.IsAlive || ReferenceEquals(w.Target.Target, element));
             element.BeginAnimation(UIElement.OpacityProperty, null);
@@ -68,6 +112,7 @@ namespace RazerBatteryTray.Desktop
         }
         internal static void SettleAll()
         {
+            SpringMotion.SettleAll();
             foreach (var clock in clocks.ToArray()) { var target = clock.Target.Target as Animatable; if (target != null && !target.IsFrozen) { target.BeginAnimation(clock.Property, null); target.SetValue(clock.Property, clock.Final); } }
             foreach (var target in fades.ToArray()) { var element = target.Target.Target as FrameworkElement; if (element != null) { element.BeginAnimation(UIElement.OpacityProperty, null); element.Opacity = target.Final; Complete(target); } }
             clocks.RemoveAll(x => !x.Target.IsAlive); fades.RemoveAll(x => !x.Target.IsAlive);

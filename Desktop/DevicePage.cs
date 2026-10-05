@@ -133,7 +133,7 @@ namespace RazerBatteryTray.Desktop
             var r = shell.Reading;
             bool supported = r.ProtocolStatus == DeviceProtocolStatus.Ready && r.RotationKnown && r.IsRotationWriteSupported && r.IsRotationHardwareVerified;
             int proposed;
-            bool valid = int.TryParse(angleValue.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out proposed) && DeviceCapabilities.For(r.ProductId).AcceptsRotation(proposed);
+            bool valid = int.TryParse(angleValue.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out proposed) && DeviceCapabilities.For(r).AcceptsRotation(proposed);
             angle.IsEnabled = angleValue.IsEnabled = !writing;
             if (applyRotation != null) applyRotation.IsEnabled = supported && valid && pendingRotation && !writing && rotationEditKey == r.DeviceKey && proposed != r.RotationAngle;
             rotationInfo.Text = r.RotationKnown
@@ -187,7 +187,7 @@ namespace RazerBatteryTray.Desktop
                 RestoreRotationPreview(); shell.Notice(Ui.T("设备已切换，请重新选择角度。", "Device changed. Choose the angle again.")); return;
             }
             int value, pid = shell.Reading.ProductId; string targetKey = shell.Reading.DeviceKey;
-            if (!int.TryParse(angleValue.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) || !DeviceCapabilities.For(pid).AcceptsRotation(value)) { shell.Notice(Ui.T("请输入 −44°～44° 的整数角度。", "Enter a whole-number angle between -44 and 44 degrees.")); return; }
+            if (!int.TryParse(angleValue.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) || !DeviceCapabilities.For(shell.Reading).AcceptsRotation(value)) { shell.Notice(Ui.T("请输入 −44°～44° 的整数角度。", "Enter a whole-number angle between -44 and 44 degrees.")); return; }
             if (shell.Reading.ProtocolStatus != DeviceProtocolStatus.Ready || !shell.Reading.RotationKnown || !shell.Reading.IsRotationWriteSupported) return;
             writing = true; UpdateReading();
             try
