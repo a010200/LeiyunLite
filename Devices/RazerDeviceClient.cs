@@ -9,6 +9,8 @@ namespace RazerBatteryTray
         private readonly IHidTransport transport;
         private readonly HardwareCacheStore cache;
         private HidDescriptor selected;
+        private MouseBatteryInfo selectedReading;
+        private bool selectedDpiReady, selectedPollingReady, selectedStagesReady;
         private string preferredKey;
         public int CachedBatteryPercent { get { return cache.CachedBatteryPercent; } }
         public RazerDeviceClient() : this(new HidTransport(), new HardwareCacheStore()) { }
@@ -35,61 +37,46 @@ namespace RazerBatteryTray
         private bool IsSelected(IHidDevice device)
         {
             var d = Describe(device);
-            return selected != null && d != null && d.CanProbe && d.InstanceKey == selected.InstanceKey
-                && string.Equals(d.Path, selected.Path, StringComparison.OrdinalIgnoreCase);
+            return selected != null && d != null && DeviceCapabilityCatalog.Find(d.ProductId) != null && DeviceCapabilityCatalog.Find(d.ProductId).AcceptsDescriptor(d) && d.InstanceKey == selected.InstanceKey
+                && string.Equals(d.Path, selected.Path, StringComparison.OrdinalIgnoreCase)
+                && d.VendorId == selected.VendorId && d.ProductId == selected.ProductId && d.Version == selected.Version
+                && d.ReportLength == selected.ReportLength && device.ReportLength == selected.ReportLength
+                && d.UsagePage == selected.UsagePage && d.Usage == selected.Usage;
         }
-        internal void InvalidateTarget() { lock (hidLock) selected = null; }
+        internal void InvalidateTarget() { lock (hidLock) { selected = null; selectedReading = null; selectedDpiReady = selectedPollingReady = selectedStagesReady = false; ClearPerformanceSession(); } }
         private static bool ReadStages(IHidDevice d, out int dpi, out int stage, out int[] stages)
         {
-            dpi = stage = 0; stages = null; var p = RazerProtocolProfile.For(Describe(d).ProductId);
-            if (p == null) return false;
-            var r = Send(d, p.Transaction, 4, 0x86, 0x26, new byte[] { 1 }, 10); int o = Offset(d);
-            if (!Success(r, o) || r[o + 10] < 1 || r[o + 10] > 5) return false;
-            var values = new int[r[o + 10]]; var ids = new HashSet<int>(); int active = r[o + 9], current = 0;
-            for (int i = 0; i < values.Length; i++) {
-                int start = o + 11 + i * 7, id = r[start]; values[i] = r[start + 1] << 8 | r[start + 2];
-                int y = r[start + 3] << 8 | r[start + 4];
-                if (id < 1 || !ids.Add(id) || values[i] < 100 || values[i] > 35000 || y < 100 || y > 35000) return false;
-                if (id == active) current = values[i];
-            }
-            if (current == 0) return false; dpi = current; stage = active; stages = values; return true;
+            dpi = stage = 0; stages = null; var descriptor = Describe(d);
+            var p = descriptor == null ? null : DeviceCapabilityCatalog.Find(descriptor.ProductId);
+            DpiSnapshot snapshot;
+            if (!ReadDpiSnapshot(d,p,true,out snapshot)) return false;
+            dpi = snapshot.X; stage = snapshot.Active; stages = snapshot.Stages; return true;
         }
-        private static MouseBatteryInfo Probe(IHidDevice device, HidDescriptor d, DeviceIdentity identity)
+        private MouseBatteryInfo Probe(IHidDevice device, HidDescriptor d, DeviceIdentity identity, out DeviceCapabilityProfile effective)
         {
+            effective=null;
             var r = new MouseBatteryInfo { ProductId = d.ProductId, DeviceKey = d.InstanceKey, InterfacePath = d.Path,
                 DeviceName = identity.Name, RawProductString = d.ProductString, ConnectionKind = identity.Connection,
                 DeviceKind = identity.Kind, IsConnected = true,
                 IsDonglePresent = identity.Kind == DeviceKind.DedicatedReceiver || identity.Kind == DeviceKind.GenericReceiver,
                 ProtocolStatus = DeviceProtocolStatus.IdentityOnly };
             var p = RazerProtocolProfile.For(d);
-            if (p == null || !d.CanProbe || identity.Kind == DeviceKind.GenericReceiver || identity.Kind == DeviceKind.Unknown) return r;
-            r.ProtocolStatus = DeviceProtocolStatus.PresentUnresponsive;
-            int dpi, stage; int[] stages; int o = Offset(device);
-            if (ReadStages(device, out dpi, out stage, out stages)) {
-                r.Dpi = dpi; r.DpiStage = stage; r.DpiStages = stages; r.DpiStageCount = stages.Length;
-            } else {
-                var v = Send(device, p.Transaction, 4, 0x85, 7, new byte[] { 0 });
-                if (Success(v, o)) { int x = v[o + 9] << 8 | v[o + 10]; if (x >= 100 && x <= 35000) r.Dpi = x; }
-            }
-            var battery = Send(device, p.Transaction, 7, 0x80, 2);
-            if (Success(battery, o)) { r.BatteryKnown = true; r.BatteryPercent = (int)Math.Round(battery[o + 9] / 255.0 * 100); }
-            var charging = Send(device, p.Transaction, 7, 0x84, 2);
-            r.IsCharging = Success(charging, o) && charging[o + 9] == 1;
-            byte rateCmd = p.LegacyPolling ? (byte)0x85 : (byte)0xC0;
-            // A failed read stays unknown until the next refresh; do not reuse an identical request in this probe.
-            var rate = Send(device, p.Transaction, 0, rateCmd, 1, null, 30);
-            if (Success(rate, o)) {
-                r.PollingRate = p.LegacyPolling ? RazerProtocol.DecodeLegacyPollingRate(rate[o + 8]) : RazerProtocol.DecodePollingRate(rate[o + 9]);
-            }
+            if (p == null || !p.Capabilities.AcceptsDescriptor(d) || device.ReportLength != d.ReportLength || identity.Kind == DeviceKind.Unknown) return r;
+            if(!ResolvePerformanceProfile(device,d,out effective)) { r.ProtocolStatus=DeviceProtocolStatus.PresentUnresponsive; return r; }
+            ProbePerformance(device,d,r,effective);
             int rotation;
             if (p.RotationReadVerified && RazerProtocolProfile.SupportsRotation(d) && TryReadRotation(device, out rotation)) {
                 r.RotationKnown = true; r.RotationAngle = rotation;
                 r.IsRotationWriteSupported = p.RotationWriteVerified;
                 r.IsRotationHardwareVerified = r.IsRotationWriteSupported;
+                r.RotationTrust = LocalHardwareOverrides.Rotation(d);
             }
             if (r.Dpi > 0 || r.BatteryKnown || r.PollingRate > 0 || r.RotationKnown) {
                 r.ProtocolStatus = DeviceProtocolStatus.Ready; r.LastUpdated = DateTime.Now;
-                r.IsWriteSupported = p.CompatibilityWrite && r.DpiStages != null;
+                var capability = effective;
+                r.IsDpiWriteSupported = capability.SetDpi && r.DpiKnown && (!capability.GetStages || capability.SetStages && r.DpiStages != null);
+                r.IsPollingWriteSupported = capability.SetPolling && r.PollingKnown;
+                r.IsWriteSupported = r.IsDpiWriteSupported || r.IsPollingWriteSupported;
                 r.IsWriteHardwareVerified = p.DpiWriteVerified && p.PollingWriteVerified;
             }
             return r;
@@ -98,21 +85,37 @@ namespace RazerBatteryTray
         {
             lock (hidLock) {
                 var choices = new List<MouseBatteryInfo>(); var descriptors = new Dictionary<string, HidDescriptor>();
-                selected = null;
+                var effectiveProfiles = new Dictionary<string,DeviceCapabilityProfile>();
+                selected = null; selectedReading = null; selectedDpiReady = selectedPollingReady = selectedStagesReady = false;
                 transport.Visit(device => {
-                    var d = Describe(device); if (d == null || !d.IsRazer) return false;
+                    var live = Describe(device); if (live == null || !live.IsRazer) return false;
+                    var d=SnapshotDescriptor(live);
                     var identity = RazerIdentityCatalog.Find(d.ProductId); if (identity.Kind == DeviceKind.Other) return false;
-                    choices.Add(Probe(device, d, identity)); descriptors[d.Path] = d; return false;
+                    DeviceCapabilityProfile effective;
+                    choices.Add(Probe(device,d,identity,out effective)); descriptors[d.Path]=d; effectiveProfiles[d.Path]=effective; return false;
                 });
+                foreach(var group in choices.Where(r=>r.ProtocolStatus==DeviceProtocolStatus.Ready &&
+                    DeviceCapabilityCatalog.Find(r.ProductId)!=null && DeviceCapabilityCatalog.Find(r.ProductId).DescriptorPolicy==DescriptorPolicy.NagaV3WindowsControl)
+                    .GroupBy(r=>r.ProductId+"|"+r.DeviceKey)) {
+                    if(group.Select(r=>r.InterfacePath).Distinct(StringComparer.OrdinalIgnoreCase).Count()>1)
+                        foreach(var r in group) { r.IsWriteSupported=r.IsDpiWriteSupported=r.IsPollingWriteSupported=false; r.ProtocolReason="ambiguous-control-path"; }
+                }
                 var result = choices.OrderByDescending(r => r.DeviceKey == preferredKey && RazerProtocolProfile.For(r.ProductId) != null)
                     .ThenByDescending(r => r.ProtocolStatus == DeviceProtocolStatus.Ready)
                     .ThenByDescending(r => r.ProtocolStatus == DeviceProtocolStatus.PresentUnresponsive).ThenByDescending(r => r.IsWriteSupported)
                     .ThenByDescending(r => r.DeviceKind != DeviceKind.Unknown && r.DeviceKind != DeviceKind.GenericReceiver)
                     .ThenBy(r => r.DeviceKey, StringComparer.Ordinal).ThenBy(r => r.InterfacePath, StringComparer.Ordinal).FirstOrDefault();
-                if (result == null) { preferredKey = null; return new MouseBatteryInfo(); }
+                if (result == null) { preferredKey = null; ClearPerformanceSession(); return new MouseBatteryInfo(); }
                 preferredKey = result.DeviceKey; cache.SelectDevice(result.DeviceKey);
                 if (result.ProtocolStatus == DeviceProtocolStatus.Ready) {
-                    selected = result.IsWriteSupported || result.IsRotationWriteSupported ? descriptors[result.InterfacePath] : null;
+                    var target = descriptors[result.InterfacePath];
+                    selected = new HidDescriptor { VendorId = target.VendorId, ProductId = target.ProductId, Version = target.Version,
+                        ReportLength = target.ReportLength, UsagePage = target.UsagePage, Usage = target.Usage,
+                        Path = target.Path, Serial = target.Serial, ContainerId = target.ContainerId };
+                    selectedReading = result;
+                    selectedPerformance=effectiveProfiles[result.InterfacePath]; selectedPerformanceTarget=TargetSignature(selected);
+                    selectedDpiReady = result.IsDpiWriteSupported; selectedPollingReady = result.IsPollingWriteSupported;
+                    selectedStagesReady = result.DpiKnown && result.DpiStages != null;
                     cache.CachedDeviceName = result.DeviceName; cache.CachedBatteryKnown = result.BatteryKnown;
                     cache.CachedBatteryPercent = result.BatteryPercent; cache.CachedDpi = result.Dpi;
                     cache.CachedDpiStage = result.DpiStage; cache.CachedDpiStageCount = result.DpiStageCount;
@@ -125,20 +128,28 @@ namespace RazerBatteryTray
                     result.Dpi = cache.CachedDpi; result.DpiStage = cache.CachedDpiStage; result.DpiStageCount = cache.CachedDpiStageCount;
                     result.DpiStages = cache.CachedDpiStages; result.PollingRate = cache.CachedPollingRate; result.LastUpdated = cache.CachedLastUpdated;
                 }
+                if(selected==null) ClearPerformanceSession();
                 return result;
             }
         }
         internal bool FastQueryDpiReading(out DpiReading value)
         {
             lock (hidLock) {
-                var r = new DpiReading(); bool ok = false;
+                var r = new DpiReading(); bool ok = false, targetSeen=false;
                 if (selected != null) transport.Visit(device => {
-                    if (!IsSelected(device)) return false; int dpi, stage; int[] stages;
-                    if (ReadStages(device, out dpi, out stage, out stages)) {
-                        r.Dpi = dpi; r.Stage = stage; r.Count = stages.Length; r.DeviceKey = selected.InstanceKey; ok = true;
+                    if (!IsSelected(device)) return false;
+                    targetSeen=true;
+                    var profile = SelectedPerformanceProfile; if(profile==null) return true; DpiSnapshot snapshot;
+                    bool live = ReadDpiSnapshot(device,profile,profile.GetStages,out snapshot);
+                    if (!live && profile.GetStages && profile.DpiProtocol!=DpiProtocolKind.V4Stages) live = ReadDpiSnapshot(device,profile,false,out snapshot);
+                    if (live) {
+                        r.Dpi = snapshot.X; r.Stage = snapshot.Active; r.Count = snapshot.Count; r.DeviceKey = selected.InstanceKey; ok = true;
                     }
                     return true;
                 });
+                if(!targetSeen && selectedPerformance!=null && selectedPerformance.TransactionProbePolicy==TransactionProbePolicy.ReadOnlySessionFallback) {
+                    ClearPerformanceSession(); selectedDpiReady=selectedPollingReady=selectedStagesReady=false;
+                }
                 value = r; return ok;
             }
         }
@@ -146,48 +157,14 @@ namespace RazerBatteryTray
         { DpiReading r; bool ok = FastQueryDpiReading(out r); dpi = r.Dpi; stage = r.Stage; count = r.Count; return ok; }
         public bool SetRazerDpiStage(int stage)
         {
-            return Write(device => {
-                int current, active; int[] stages;
-                if (!ReadStages(device, out current, out active, out stages) || stage < 1 || stage > stages.Length) return false;
-                int o = Offset(device); var before = Send(device, 0x1F, 4, 0x86, 0x26, new byte[] { 1 });
-                if (!Success(before, o)) return false;
-                var payload = new byte[0x26]; Array.Copy(before, o + 8, payload, 0, payload.Length); payload[1] = (byte)stage;
-                if (!Success(Send(device, 0x1F, 4, 6, 0x26, payload), o)) return false;
-                int afterDpi, afterStage; int[] after;
-                return ReadStages(device, out afterDpi, out afterStage, out after) && afterStage == stage && stages.SequenceEqual(after);
-            });
+            lock (hidLock) {
+                if (selected == null || stage < 1 || stage > 5) return false;
+                return SetDpiCore(selected.ProductId,0,stage,LegacyWriteKey(selected.ProductId,null),selected.Path).Success;
+            }
         }
         public bool SetRazerDpi(int dpi)
-        {
-            if (dpi < 100 || dpi > 35000) return false;
-            return Write(device => {
-                byte hi = (byte)(dpi >> 8), lo = (byte)dpi; int o = Offset(device);
-                if (!Success(Send(device, 0x1F, 4, 5, 7, new byte[] { 1, hi, lo, hi, lo, 0, 0 }), o)) return false;
-                var r = Send(device, 0x1F, 4, 0x85, 7, new byte[] { 0 });
-                return Success(r, o) && (r[o + 9] << 8 | r[o + 10]) == dpi;
-            });
-        }
+        { lock (hidLock) return selected != null && SetDpiTransactional(selected.ProductId,dpi,LegacyWriteKey(selected.ProductId,null),selected.Path).Success; }
         public bool SetRazerPollingRate(int hz)
-        {
-            return Write(device => {
-                var p = RazerProtocolProfile.For(selected.ProductId); int o = Offset(device);
-                if (hz != 125 && hz != 500 && hz != 1000 && (p.LegacyPolling || hz != 2000 && hz != 4000 && hz != 8000)) return false;
-                byte get = p.LegacyPolling ? (byte)0x85 : (byte)0xC0, set = p.LegacyPolling ? (byte)5 : (byte)0x40;
-                var args = p.LegacyPolling ? new byte[] { (byte)(1000 / hz) } : new byte[] { 0, RazerProtocol.EncodePollingRate(hz) };
-                if (!Success(Send(device, p.Transaction, 0, get, 1), o) || !Success(Send(device, p.Transaction, 0, set, (byte)args.Length, args), o)) return false;
-                var r = Send(device, p.Transaction, 0, get, 1);
-                return Success(r, o) && (p.LegacyPolling ? RazerProtocol.DecodeLegacyPollingRate(r[o + 8]) : RazerProtocol.DecodePollingRate(r[o + 9])) == hz;
-            });
-        }
-        private bool Write(Func<IHidDevice, bool> operation)
-        {
-            bool ok = false;
-            lock (hidLock) {
-                var p = selected == null ? null : RazerProtocolProfile.For(selected.ProductId);
-                if (p == null || !p.CompatibilityWrite) return false;
-                transport.Visit(device => { if (!IsSelected(device)) return false; ok = operation(device); return true; });
-            }
-            return ok;
-        }
+        { lock (hidLock) return selected != null && SetPollingTransactional(selected.ProductId,hz,LegacyWriteKey(selected.ProductId,null),selected.Path).Success; }
     }
 }

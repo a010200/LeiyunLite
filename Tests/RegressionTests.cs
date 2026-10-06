@@ -193,7 +193,7 @@ namespace RazerBatteryTray.Tests
             Check(client.SetRazerPollingRate(2000) && hid.Rate == 2000, "Rate write");
             int o = size == 91 ? 1 : 0;
             byte[] last = hid.Requests.Last(r => r[o + 6] == 0 && r[o + 7] == 0x40);
-            Check(last[o + 6] == 0 && last[o + 7] == 0x40 && last[o + 8] == 0 && last[o + 9] == 4, "Rate payload");
+            Check(last[o + 6] == 0 && last[o + 7] == 0x40 && last[o + 8] == 1 && last[o + 9] == 4, "Rate second storage payload");
         }
 
         private static void TestMultipleDevices()
@@ -387,11 +387,15 @@ namespace RazerBatteryTray.Tests
                         response[start + 3] = response[start + 1]; response[start + 4] = response[start + 2];
                     }
                 }
-                if (cls == 4 && cmd == 0x85) { response[o + 9] = (byte)(Dpi >> 8); response[o + 10] = (byte)Dpi; }
+                if (cls == 4 && cmd == 0x85) { response[o + 9] = (byte)(Dpi >> 8); response[o + 10] = (byte)Dpi; response[o + 11] = response[o + 9]; response[o + 12] = response[o + 10]; }
                 if (cls == 0 && cmd == 0xC0) response[o + 9] = RazerProtocol.EncodePollingRate(Rate);
                 if (response[o] == 2)
                 {
-                    if (cls == 4 && cmd == 6) ActiveStage = request[o + 9];
+                    if (cls == 4 && cmd == 6) {
+                        ActiveStage = request[o + 9];
+                        for (int i = 0; i < StageValues.Length; i++) StageValues[i] = request[o + 12 + i * 7] << 8 | request[o + 13 + i * 7];
+                        Dpi = StageValues[ActiveStage - 1];
+                    }
                     if (cls == 4 && cmd == 5) Dpi = (request[o + 9] << 8) | request[o + 10];
                     if (cls == 0 && cmd == 0x40) Rate = RazerProtocol.DecodePollingRate(request[o + 9]);
                 }

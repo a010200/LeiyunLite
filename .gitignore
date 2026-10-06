@@ -4,6 +4,8 @@
 *.obj
 bin/
 obj/
+__pycache__/
+*.pyc
 .vs/
 .local-tools/
 *.exe

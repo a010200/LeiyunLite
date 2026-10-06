@@ -9,7 +9,7 @@
     <StartupObject>RazerBatteryTray.Desktop.DesktopApp</StartupObject>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <PlatformTarget>x64</PlatformTarget>
-    <OutputPath>bin\Desktop1.2.7\</OutputPath>
+    <OutputPath>bin\Desktop1.2.9\</OutputPath>
     <ApplicationIcon>Desktop\Lite.ico</ApplicationIcon>
     <Optimize>true</Optimize>
   </PropertyGroup>

@@ -92,53 +92,5 @@ namespace RazerBatteryTray
             }
             return result;
         }
-        // Read / modify / read the active stage; do not replace the user's other stages.
-        internal bool SetDpiVerified(int pid, int value, string expectedKey = null)
-        {
-            if (!DeviceCapabilities.For(pid).AcceptsDpi(value)) return false;
-            return Write(device => {
-                if (!Matches(device, pid, expectedKey)) return false;
-                int validDpi, validStage; int[] validStages;
-                if (!ReadStages(device, out validDpi, out validStage, out validStages)) return false;
-                int o = Offset(device);
-                var before = Send(device, 0x1F, 4, 0x86, 0x26, new byte[] { 1 });
-                if (!Reply(device, before, 4, 0x86)) return false;
-                int count = before[o + 10], active = before[o + 9], index = -1;
-                if (count < 1 || count > 5) return false;
-                var payload = new byte[0x26]; Array.Copy(before, o + 8, payload, 0, payload.Length);
-                for (int i = 0; i < count; i++) if (payload[3 + i * 7] == active) index = 3 + i * 7;
-                if (index < 0) return false;
-                payload[0] = 1;
-                payload[index + 1] = payload[index + 3] = (byte)(value >> 8);
-                payload[index + 2] = payload[index + 4] = (byte)value;
-                if (!Reply(device, Send(device, 0x1F, 4, 6, 0x26, payload, 25), 4, 6)) return false;
-                var after = Send(device, 0x1F, 4, 0x86, 0x26, new byte[] { 1 });
-                if (!Reply(device, after, 4, 0x86)) return false;
-                // Storage byte may differ between request and reply. Everything
-                // else in the used stage payload must equal what we wrote.
-                for (int i = 1; i < 3 + count * 7; i++) if (payload[i] != after[o + 8 + i]) return false;
-                return true;
-            });
-        }
-        internal bool SetRateVerified(int pid, int hz, string expectedKey = null)
-        {
-            if (!DeviceCapabilities.For(pid).AcceptsRate(hz)) return false;
-            return Write(device => {
-                if (!Matches(device, pid, expectedKey)) return false;
-                bool legacy = pid == 0x00DE || pid == 0x00DF || pid == 0x00C0;
-                byte get = legacy ? (byte)0x85 : (byte)0xC0, set = legacy ? (byte)0x05 : (byte)0x40;
-                // Reject unknown firmware/transport before attempting any write.
-                var before = Send(device, 0x1F, 0, get, 1);
-                if (!Reply(device, before, 0, get)) return false;
-                int old = legacy ? RazerProtocol.DecodeLegacyPollingRate(before[Offset(device) + 8]) : RazerProtocol.DecodePollingRate(before[Offset(device) + 9]);
-                if (old == 0) return false;
-                byte[] args = legacy ? new byte[] { (byte)(1000 / hz) } : new byte[] { 0, RazerProtocol.EncodePollingRate(hz) };
-                var written = Send(device, 0x1F, 0, set, (byte)args.Length, args, 150);
-                if (!Reply(device, written, 0, set)) return false;
-                var read = Send(device, 0x1F, 0, get, 1);
-                if (!Reply(device, read, 0, get)) return false;
-                return (legacy ? RazerProtocol.DecodeLegacyPollingRate(read[Offset(device) + 8]) : RazerProtocol.DecodePollingRate(read[Offset(device) + 9])) == hz;
-            });
-        }
     }
 }

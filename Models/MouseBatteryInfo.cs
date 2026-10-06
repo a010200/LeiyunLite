@@ -11,7 +11,19 @@ namespace RazerBatteryTray
         public string ConnectionKind { get; set; }
         public DeviceKind DeviceKind { get; set; }
         public DeviceProtocolStatus ProtocolStatus { get; set; }
+        public string ProtocolReason { get; set; }
         public bool BatteryKnown { get; set; }
+        public bool DpiKnown { get; set; }
+        public bool PollingKnown { get; set; }
+        public bool ChargingKnown { get; set; }
+        public bool IsDpiWriteSupported { get; set; }
+        public bool IsPollingWriteSupported { get; set; }
+        public CapabilityTrust DpiTrust { get; set; }
+        public CapabilityTrust PollingTrust { get; set; }
+        public CapabilityTrust BatteryTrust { get; set; }
+        public CapabilityTrust ChargingTrust { get; set; }
+        public CapabilityTrust RotationTrust { get; set; }
+        public CapabilityTrust ReceiverTrust { get; set; }
         public bool IsWriteSupported { get; set; }
         public bool IsWriteHardwareVerified { get; set; }
         public bool IsConnected { get; set; }

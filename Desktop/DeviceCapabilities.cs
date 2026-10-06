@@ -8,25 +8,22 @@ namespace RazerBatteryTray.Desktop
     {
         public int ProductId, MinimumDpi, MaximumDpi;
         public int[] Rates = new int[0];
+        public int[] AvailableDpi = new int[0];
         public bool Known, RotationProtocolCandidate;
         public static DeviceCapabilities For(int pid)
         {
             var c = new DeviceCapabilities { ProductId = pid };
-            switch (pid)
-            {
-                case 0x00DE: // Viper V3 Pro SE, cable
-                case 0x00DF: // Viper V3 Pro SE, bundled receiver
-                    c.Known = true; c.MinimumDpi = 100; c.MaximumDpi = 35000;
-                    c.Rates = new[] { 125, 500, 1000 };
-                    c.RotationProtocolCandidate = pid == 0x00DF; break;
-                case 0x00C0: // Viper V3 Pro, cable
-                case 0x00C1: // Viper V3 Pro, dedicated receiver
-                    c.Known = true; c.MinimumDpi = 100; c.MaximumDpi = 35000;
-                    c.Rates = pid == 0x00C1 ? new[] { 125, 500, 1000, 2000, 4000, 8000 } : new[] { 125, 500, 1000 }; break;
+            var p = DeviceCapabilityCatalog.Find(pid);
+            if (p != null && p.Transport == TransportKind.HidFeature90Or91) {
+                c.Known = p.GetDpi || p.GetPolling; c.MinimumDpi = p.MinimumDpi; c.MaximumDpi = p.MaximumDpi;
+                c.AvailableDpi = (int[])p.AvailableDpi.Clone(); c.Rates = (int[])p.PollRates.Clone();
             }
+            // Preserve the old static receiver query for compatibility. Actual
+            // command and UI permissions still use the exact live descriptor.
+            c.RotationProtocolCandidate = pid == 0x00DF;
             return c;
         }
-        public bool AcceptsDpi(int value) { return Known && value >= MinimumDpi && value <= MaximumDpi; }
+        public bool AcceptsDpi(int value) { return Known && MinimumDpi > 0 && value >= MinimumDpi && value <= MaximumDpi && (AvailableDpi.Length == 0 || Array.IndexOf(AvailableDpi,value) >= 0); }
         public bool AcceptsRate(int value) { return Known && Array.IndexOf(Rates, value) >= 0; }
         public bool AcceptsRotation(int value) { return RotationProtocolCandidate && value >= RazerProtocol.MinimumRotation && value <= RazerProtocol.MaximumRotation; }
         internal static DeviceCapabilities For(HidDescriptor descriptor)

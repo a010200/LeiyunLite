@@ -15,16 +15,15 @@ namespace RazerBatteryTray
     internal sealed class RazerProtocolProfile
     {
         internal int ProductId;
-        internal byte Transaction = 0x1F;
+        internal DeviceCapabilityProfile Capabilities;
         internal bool LegacyPolling, ReadVerified, DpiWriteVerified, PollingWriteVerified;
         internal bool RotationReadVerified, RotationWriteCandidate, RotationWriteVerified;
-        // Existing R4 compatibility path only. Does NOT mean hardware acceptance.
-        internal bool CompatibilityWrite;
         internal static RazerProtocolProfile For(int pid)
         {
-            if (pid != 0x00C0 && pid != 0x00C1 && pid != 0x00DE && pid != 0x00DF) return null;
-            return new RazerProtocolProfile { ProductId = pid, LegacyPolling = pid != 0x00C1, ReadVerified = pid == 0x00DF,
-                DpiWriteVerified = false, PollingWriteVerified = false, CompatibilityWrite = true,
+            var capabilities = DeviceCapabilityCatalog.Find(pid);
+            if (capabilities == null || capabilities.Transport != TransportKind.HidFeature90Or91) return null;
+            return new RazerProtocolProfile { ProductId = pid, Capabilities = capabilities, LegacyPolling = capabilities.PollingProtocol == PollingProtocolKind.Legacy, ReadVerified = pid == 0x00DF,
+                DpiWriteVerified = false, PollingWriteVerified = false,
                 RotationReadVerified = pid == 0x00DF, RotationWriteCandidate = pid == 0x00DF,
                 // 00DF, bcdDevice 0100, 91-byte interface: readback and Raw Input
                 // comparison accepted by the maintainer. Other routes remain gated.

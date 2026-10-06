@@ -13,7 +13,7 @@ namespace RazerBatteryTray.Desktop
         private static void VersionMetadata()
         {
             var assembly = typeof(AppVersion).Assembly;
-            Check(AppVersion.Number == "1.2.8" && ReleaseUpdateService.CurrentVersion == AppVersion.Number, "Version baseline");
+            Check(AppVersion.Number == "1.2.9" && ReleaseUpdateService.CurrentVersion == AppVersion.Number, "Version baseline");
             Check(assembly.GetName().Version.ToString() == AppVersion.AssemblyNumber, "Assembly version");
             var info = (AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(assembly, typeof(AssemblyInformationalVersionAttribute));
             var file = (AssemblyFileVersionAttribute)Attribute.GetCustomAttribute(assembly, typeof(AssemblyFileVersionAttribute));
@@ -84,8 +84,8 @@ namespace RazerBatteryTray.Desktop
         }
         private static void IdentitySafety()
         {
-            Check(RazerIdentityCatalog.Count == 117, "113 upstream mouse PIDs plus SE pair, dock and keyboard exclusion");
-            foreach (int pid in new[] { 0x00B3, 0x00A4, 0x0013, 0xFFFF, 0x0203 }) {
+            Check(RazerIdentityCatalog.Count == DeviceCapabilityCatalog.All.Count() + 2, "Combined capabilities plus local dock and keyboard exclusion");
+            foreach (int pid in new[] { 0x0096, 0x00A4, 0x0013, 0xFFFF, 0x0203 }) {
                 var f = new DeviceFake(91); f.Descriptor.ProductId = pid;
                 var c = new RazerDeviceClient(new Many(f), new HardwareCacheStore(null));
                 var r = c.QueryRazerDeviceInfo();

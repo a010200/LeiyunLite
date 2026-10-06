@@ -1,0 +1,470 @@
+{
+  "0013": {
+    "name": "Razer Orochi 2011",
+    "kind": "Mouse"
+  },
+  "0015": {
+    "name": "Razer Naga",
+    "kind": "Mouse"
+  },
+  "0016": {
+    "name": "Razer DeathAdder 3.5G",
+    "kind": "Mouse"
+  },
+  "001F": {
+    "name": "Razer Naga Epic",
+    "kind": "Mouse"
+  },
+  "0020": {
+    "name": "Razer Abyssus 1800",
+    "kind": "Mouse"
+  },
+  "0024": {
+    "name": "Razer Mamba 2012 有线",
+    "kind": "Mouse"
+  },
+  "0025": {
+    "name": "Razer Mamba 2012 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "0029": {
+    "name": "Razer DeathAdder 3.5G Black",
+    "kind": "Mouse"
+  },
+  "002E": {
+    "name": "Razer Naga 2012",
+    "kind": "Mouse"
+  },
+  "002F": {
+    "name": "Razer Imperator 2012",
+    "kind": "Mouse"
+  },
+  "0032": {
+    "name": "Razer Ouroboros 2012",
+    "kind": "Mouse"
+  },
+  "0034": {
+    "name": "Razer Taipan",
+    "kind": "Mouse"
+  },
+  "0036": {
+    "name": "Razer Naga Hex Red",
+    "kind": "Mouse"
+  },
+  "0037": {
+    "name": "Razer DeathAdder 2013",
+    "kind": "Mouse"
+  },
+  "0038": {
+    "name": "Razer DeathAdder 1800",
+    "kind": "Mouse"
+  },
+  "0039": {
+    "name": "Razer Orochi 2013",
+    "kind": "Mouse"
+  },
+  "003E": {
+    "name": "Razer Naga Epic Chroma 有线",
+    "kind": "Mouse"
+  },
+  "003F": {
+    "name": "Razer Naga Epic Chroma 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "0040": {
+    "name": "Razer Naga 2014",
+    "kind": "Mouse"
+  },
+  "0041": {
+    "name": "Razer Naga Hex",
+    "kind": "Mouse"
+  },
+  "0042": {
+    "name": "Razer Abyssus 2014",
+    "kind": "Mouse"
+  },
+  "0043": {
+    "name": "Razer DeathAdder Chroma",
+    "kind": "Mouse"
+  },
+  "0044": {
+    "name": "Razer Mamba 有线",
+    "kind": "Mouse"
+  },
+  "0045": {
+    "name": "Razer Mamba 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "0046": {
+    "name": "Razer Mamba Tournament Edition",
+    "kind": "Mouse"
+  },
+  "0048": {
+    "name": "Razer Orochi 有线",
+    "kind": "Mouse"
+  },
+  "004C": {
+    "name": "Razer Diamondback Chroma",
+    "kind": "Mouse"
+  },
+  "004F": {
+    "name": "Razer DeathAdder 2000",
+    "kind": "Mouse"
+  },
+  "0050": {
+    "name": "Razer Naga Hex V2",
+    "kind": "Mouse"
+  },
+  "0053": {
+    "name": "Razer Naga Chroma",
+    "kind": "Mouse"
+  },
+  "0054": {
+    "name": "Razer DeathAdder 3500",
+    "kind": "Mouse"
+  },
+  "0059": {
+    "name": "Razer Lancehead 有线",
+    "kind": "Mouse"
+  },
+  "005A": {
+    "name": "Razer Lancehead 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "005B": {
+    "name": "Razer Abyssus V2",
+    "kind": "Mouse"
+  },
+  "005C": {
+    "name": "Razer DeathAdder Elite",
+    "kind": "Mouse"
+  },
+  "005E": {
+    "name": "Razer Abyssus 2000",
+    "kind": "Mouse"
+  },
+  "0060": {
+    "name": "Razer Lancehead Tournament Edition",
+    "kind": "Mouse"
+  },
+  "0062": {
+    "name": "Razer Atheris 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "0064": {
+    "name": "Razer Basilisk",
+    "kind": "Mouse"
+  },
+  "0065": {
+    "name": "Razer Basilisk Essential",
+    "kind": "Mouse"
+  },
+  "0067": {
+    "name": "Razer Naga Trinity",
+    "kind": "Mouse"
+  },
+  "006A": {
+    "name": "Razer Abyssus Elite D.Va Edition",
+    "kind": "Mouse"
+  },
+  "006B": {
+    "name": "Razer Abyssus Essential",
+    "kind": "Mouse"
+  },
+  "006C": {
+    "name": "Razer Mamba Elite 有线",
+    "kind": "Mouse"
+  },
+  "006E": {
+    "name": "Razer DeathAdder Essential",
+    "kind": "Mouse"
+  },
+  "006F": {
+    "name": "Razer Lancehead Wireless 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "0070": {
+    "name": "Razer Lancehead Wireless 有线",
+    "kind": "DedicatedReceiver"
+  },
+  "0071": {
+    "name": "Razer DeathAdder Essential White Edition",
+    "kind": "Mouse"
+  },
+  "0072": {
+    "name": "Razer Mamba Wireless 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "0073": {
+    "name": "Razer Mamba Wireless 有线",
+    "kind": "DedicatedReceiver"
+  },
+  "0077": {
+    "name": "Razer Pro Click 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "0078": {
+    "name": "Razer Viper",
+    "kind": "Mouse"
+  },
+  "007A": {
+    "name": "Razer Viper Ultimate 有线",
+    "kind": "Mouse"
+  },
+  "007B": {
+    "name": "Razer Viper Ultimate 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "007C": {
+    "name": "Razer DeathAdder V2 Pro 有线",
+    "kind": "Mouse"
+  },
+  "007D": {
+    "name": "Razer DeathAdder V2 Pro 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "0080": {
+    "name": "Razer Pro Click 有线",
+    "kind": "Mouse"
+  },
+  "0083": {
+    "name": "Razer Basilisk X HyperSpeed",
+    "kind": "Mouse"
+  },
+  "0084": {
+    "name": "Razer DeathAdder V2",
+    "kind": "Mouse"
+  },
+  "0085": {
+    "name": "Razer Basilisk V2",
+    "kind": "Mouse"
+  },
+  "0086": {
+    "name": "Razer Basilisk Ultimate 有线",
+    "kind": "Mouse"
+  },
+  "0088": {
+    "name": "Razer Basilisk Ultimate 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "008A": {
+    "name": "Razer Viper Mini",
+    "kind": "Mouse"
+  },
+  "008C": {
+    "name": "Razer DeathAdder V2 Mini",
+    "kind": "Mouse"
+  },
+  "008D": {
+    "name": "Razer Naga Left-Handed Edition",
+    "kind": "Mouse"
+  },
+  "008F": {
+    "name": "Razer Naga Pro 有线",
+    "kind": "Mouse"
+  },
+  "0090": {
+    "name": "Razer Naga Pro 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "0091": {
+    "name": "Razer Viper 8KHz",
+    "kind": "Mouse"
+  },
+  "0094": {
+    "name": "Razer Orochi V2 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "0095": {
+    "name": "Razer Orochi V2 Bluetooth",
+    "kind": "Mouse"
+  },
+  "0096": {
+    "name": "Razer Naga X",
+    "kind": "Mouse"
+  },
+  "0098": {
+    "name": "Razer DeathAdder Essential 2021",
+    "kind": "Mouse"
+  },
+  "0099": {
+    "name": "Razer Basilisk V3",
+    "kind": "Mouse"
+  },
+  "009A": {
+    "name": "Razer Pro Click Mini 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "009C": {
+    "name": "Razer DeathAdder V2 X HyperSpeed",
+    "kind": "Mouse"
+  },
+  "009E": {
+    "name": "Razer Viper Mini Signature Edition 有线",
+    "kind": "Mouse"
+  },
+  "009F": {
+    "name": "Razer Viper Mini Signature Edition 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00A1": {
+    "name": "Razer DeathAdder V2 Lite",
+    "kind": "Mouse"
+  },
+  "00A3": {
+    "name": "Razer Cobra",
+    "kind": "Mouse"
+  },
+  "00A5": {
+    "name": "Razer Viper V2 Pro 有线",
+    "kind": "Mouse"
+  },
+  "00A6": {
+    "name": "Razer Viper V2 Pro 无线/随附接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "00A7": {
+    "name": "Razer Naga V2 Pro 有线",
+    "kind": "Mouse"
+  },
+  "00A8": {
+    "name": "Razer Naga V2 Pro 无线/随附接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "00AA": {
+    "name": "Razer Basilisk V3 Pro 有线",
+    "kind": "Mouse"
+  },
+  "00AB": {
+    "name": "Razer Basilisk V3 Pro 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00AF": {
+    "name": "Razer Cobra Pro 有线",
+    "kind": "Mouse"
+  },
+  "00B0": {
+    "name": "Razer Cobra Pro 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00B2": {
+    "name": "Razer DeathAdder V3",
+    "kind": "Mouse"
+  },
+  "00B3": {
+    "name": "Razer HyperPolling Wireless Dongle",
+    "kind": "GenericReceiver"
+  },
+  "00B4": {
+    "name": "Razer Naga V2 HyperSpeed 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "00B6": {
+    "name": "Razer DeathAdder V3 Pro 有线",
+    "kind": "Mouse"
+  },
+  "00B7": {
+    "name": "Razer DeathAdder V3 Pro 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00B8": {
+    "name": "Razer Viper V3 HyperSpeed",
+    "kind": "Mouse"
+  },
+  "00B9": {
+    "name": "Razer Basilisk V3 X HyperSpeed",
+    "kind": "Mouse"
+  },
+  "00BE": {
+    "name": "Razer DeathAdder V4 Pro 有线",
+    "kind": "Mouse"
+  },
+  "00BF": {
+    "name": "Razer DeathAdder V4 Pro 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00C0": {
+    "name": "Razer Viper V3 Pro 有线",
+    "kind": "Mouse"
+  },
+  "00C1": {
+    "name": "Razer Viper V3 Pro 无线/HyperSpeed 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "00C2": {
+    "name": "Razer DeathAdder V3 Pro 有线（替代 PID）",
+    "kind": "Mouse"
+  },
+  "00C3": {
+    "name": "Razer DeathAdder V3 Pro 无线（替代 PID）",
+    "kind": "DedicatedReceiver"
+  },
+  "00C4": {
+    "name": "Razer DeathAdder V3 HyperSpeed 有线",
+    "kind": "Mouse"
+  },
+  "00C5": {
+    "name": "Razer DeathAdder V3 HyperSpeed 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00C7": {
+    "name": "Razer Pro Click V2 Vertical Edition 有线",
+    "kind": "Mouse"
+  },
+  "00C8": {
+    "name": "Razer Pro Click V2 Vertical Edition 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00CB": {
+    "name": "Razer Basilisk V3 35K",
+    "kind": "Mouse"
+  },
+  "00CC": {
+    "name": "Razer Basilisk V3 Pro 35K 有线",
+    "kind": "Mouse"
+  },
+  "00CD": {
+    "name": "Razer Basilisk V3 Pro 35K 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00D0": {
+    "name": "Razer Pro Click V2 有线",
+    "kind": "Mouse"
+  },
+  "00D1": {
+    "name": "Razer Pro Click V2 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00D3": {
+    "name": "Razer Basilisk Mobile 有线",
+    "kind": "Mouse"
+  },
+  "00D4": {
+    "name": "Razer Basilisk Mobile 接收器",
+    "kind": "DedicatedReceiver"
+  },
+  "00D6": {
+    "name": "Razer Basilisk V3 Pro 35K Phantom Green 有线",
+    "kind": "Mouse"
+  },
+  "00D7": {
+    "name": "Razer Basilisk V3 Pro 35K Phantom Green 无线",
+    "kind": "DedicatedReceiver"
+  },
+  "00DE": {
+    "name": "Razer Viper V3 Pro SE",
+    "kind": "Mouse"
+  },
+  "00DF": {
+    "name": "Razer Viper V3 Pro SE",
+    "kind": "DedicatedReceiver"
+  },
+  "00A4": {
+    "name": "Razer Mouse Dock Pro",
+    "kind": "GenericReceiver"
+  },
+  "0203": {
+    "name": "Razer BlackWidow",
+    "kind": "Other"
+  }
+}

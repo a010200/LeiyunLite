@@ -1,4 +1,4 @@
-param([ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug')
+param([ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug', [string]$OutputDirectory = 'bin\VSCode1.2.9', [string]$IntermediateDirectory = 'obj\VSCode1.2.9')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
@@ -8,7 +8,7 @@ if (-not $msbuild) { throw 'MSBuild 17 was not found. Install Visual Studio 2022
 # Separate development output: never overwrite a distributed executable.
 Push-Location $projectRoot
 try {
-    & $msbuild 'LeiyunLite.R3.sln' /nologo /m /nr:false /t:Build "/p:Configuration=$Configuration" /p:Platform=x64 /p:OutputPath=bin\VSCode1.2.8\ /p:IntermediateOutputPath=obj\VSCode1.2.8\ /p:DebugSymbols=true /p:DebugType=full "/p:Optimize=$($Configuration -eq 'Release')" /v:minimal
-    if ($LASTEXITCODE -ne 0) { throw "v1.2.8 build failed ($LASTEXITCODE)." }
-    Write-Output 'v1.2.8 build succeeded: bin\VSCode1.2.8\LeiyunLite.Desktop.exe'
+    & $msbuild 'LeiyunLite.R3.sln' /nologo /m /nr:false /t:Build "/p:Configuration=$Configuration" /p:Platform=x64 "/p:OutputPath=$OutputDirectory\" "/p:IntermediateOutputPath=$IntermediateDirectory\" /p:DebugSymbols=true /p:DebugType=full "/p:Optimize=$($Configuration -eq 'Release')" /v:minimal
+    if ($LASTEXITCODE -ne 0) { throw "v1.2.9 build failed ($LASTEXITCODE)." }
+    Write-Output ("v1.2.9 build succeeded: "+$OutputDirectory+"\LeiyunLite.Desktop.exe")
 } finally { Pop-Location }

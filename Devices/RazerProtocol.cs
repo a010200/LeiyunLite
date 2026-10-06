@@ -1,6 +1,6 @@
 namespace RazerBatteryTray
 {
-    internal static class RazerProtocol
+    internal static partial class RazerProtocol
     {
         internal const int MinimumRotation = -44;
         internal const int MaximumRotation = 44;
@@ -45,16 +45,9 @@ namespace RazerBatteryTray
 
         internal static byte EncodePollingRate(int hz)
         {
-            switch (hz)
-            {
-                case 8000: return 0x01;
-                case 4000: return 0x02;
-                case 2000: return 0x04;
-                case 1000: return 0x08;
-                case 500: return 0x10;
-                case 125: return 0x40;
-                default: return 0x02;
-            }
+            byte value;
+            if (!TryEncodePollingRate(PollingProtocolKind.HighRate, hz, out value)) throw new System.ArgumentOutOfRangeException("hz");
+            return value; // Compatibility helper for existing valid-value fixtures only.
         }
 
         internal static byte CalculateCrc(byte[] report, int startOffset)

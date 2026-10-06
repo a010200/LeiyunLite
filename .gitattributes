@@ -1,2 +1,5 @@
 # Preserve pinned upstream SVG test fixtures byte-for-byte, including their EOF.
 /Tests/Fixtures/FluentSystemIcons/*.svg -text whitespace=cr-at-eol,-blank-at-eof
+# Deterministic generator outputs are compared as UTF-8 bytes on all hosts.
+/Devices/OpenRazerCapabilityCatalog.cs -text
+/docs/OPENRAZER-CAPABILITY-MATRIX.md -text

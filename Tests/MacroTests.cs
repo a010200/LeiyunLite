@@ -329,6 +329,13 @@ namespace RazerBatteryTray.Tests
             using (var textbox = new TextBox { Dock = DockStyle.Fill, Multiline = true })
             {
                 hook.Start(); target.Controls.Add(textbox); target.Show(); target.Activate(); SetForegroundWindow(target.Handle); textbox.Focus(); Application.DoEvents();
+                // Windows may deny foreground activation from a background
+                // runner. Allow a bounded human click; never inject elsewhere.
+                var foregroundWait = Stopwatch.StartNew();
+                if(GetForegroundWindow()!=target.Handle || !textbox.Focused) Console.WriteLine("WAIT: click LeiyunLite isolated input test within 20 seconds; no input sent yet");
+                while((GetForegroundWindow()!=target.Handle || !textbox.Focused) && foregroundWait.ElapsedMilliseconds<20000) {
+                    Application.DoEvents(); Thread.Sleep(25);
+                }
                 Check(GetForegroundWindow() == target.Handle && textbox.Focused, "Test target must be foreground before injection");
                 var output = new WindowsMacroOutput(); output.Text("LeiyunLite 测试", CancellationToken.None); output.Key(135, true); output.Key(135, false);
                 Until(() => textbox.Text == "LeiyunLite 测试"); Check(injectedRouted == 0, "Injected input reached macro bindings");

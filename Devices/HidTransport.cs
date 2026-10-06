@@ -19,6 +19,13 @@ namespace RazerBatteryTray
         void Visit(Func<IHidDevice, bool> visitor);
     }
 
+    // Optional sequence: one send followed by bounded response-only reads.
+    internal interface ISequencedHidFeatureDevice
+    {
+        bool SendFeature(byte[] request);
+        byte[] GetFeature(int delayMs);
+    }
+
     internal interface IHidIdentity
     {
         int ProductId { get; }
@@ -87,7 +94,7 @@ namespace RazerBatteryTray
             finally { HidNative.SetupDiDestroyDeviceInfoList(devices); }
         }
 
-        private sealed class HidDevice : IHidDevice, IHidDescriptor
+        private sealed class HidDevice : IHidDevice, IHidDescriptor, ISequencedHidFeatureDevice
         {
             private readonly IntPtr handle;
             public HidDescriptor Descriptor { get; private set; }
@@ -111,6 +118,13 @@ namespace RazerBatteryTray
                 Thread.Sleep(delayMs);
                 var response = new byte[ReportLength];
                 return HidNative.HidD_GetFeature(handle, response, response.Length) ? response : null;
+            }
+            public bool SendFeature(byte[] request)
+            { return request != null && request.Length == ReportLength && HidNative.HidD_SetFeature(handle,request,request.Length); }
+            public byte[] GetFeature(int delayMs)
+            {
+                Thread.Sleep(delayMs); var response=new byte[ReportLength];
+                return HidNative.HidD_GetFeature(handle,response,response.Length)?response:null;
             }
         }
     }

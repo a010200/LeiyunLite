@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -18,6 +19,62 @@ namespace RazerBatteryTray.Desktop
         private static readonly List<string> results = new List<string>();
         private static int passed, failed;
         private static string artifacts;
+        [StructLayout(LayoutKind.Sequential)] private struct TestMonitorInfo { internal int Size; internal ShellWindow.NativeRect Monitor,Work; internal int Flags; }
+        [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd,int flags);
+        [DllImport("user32.dll",EntryPoint="GetMonitorInfoW")] private static extern bool GetMonitorInfo(IntPtr monitor,ref TestMonitorInfo info);
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd,out ShellWindow.NativeRect bounds);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        private static ShellWindow.NativeRect RectPixels(int l,int t,int r,int b)
+        { return new ShellWindow.NativeRect {Left=l,Top=t,Right=r,Bottom=b}; }
+        private static void WorkAreaGeometry()
+        {
+            var cases=new[]{
+                new[]{0,0,1920,1080,0,0,1920,1040,0,0,1920,1040},
+                new[]{0,0,1920,1080,0,40,1920,1080,0,40,1920,1040},
+                new[]{0,0,1920,1080,40,0,1920,1080,40,0,1880,1080},
+                new[]{0,0,1920,1080,0,0,1880,1080,0,0,1880,1080},
+                new[]{-1920,-100,0,980,-1880,-100,0,940,40,0,1880,1040}
+            };
+            foreach(var c in cases) {
+                var limits=new ShellWindow.MinMaxInfo {MinTrackSize=new ShellWindow.NativePoint {X=700,Y=560}};
+                Check(ShellWindow.ApplyMonitorWorkArea(ref limits,RectPixels(c[0],c[1],c[2],c[3]),RectPixels(c[4],c[5],c[6],c[7])),"Valid geometry");
+                Check(limits.MaxPosition.X==c[8] && limits.MaxPosition.Y==c[9] && limits.MaxSize.X==c[10] && limits.MaxSize.Y==c[11] && limits.MaxTrackSize.X==c[10] && limits.MaxTrackSize.Y==c[11] && limits.MinTrackSize.X==700 && limits.MinTrackSize.Y==560,"Physical, monitor-relative limits preserve minimum");
+            }
+        }
+        private static void MaximizeWorkArea(ShellWindow window)
+        {
+            IntPtr hwnd=new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            var info=new TestMonitorInfo {Size=Marshal.SizeOf(typeof(TestMonitorInfo))};
+            Check(GetMonitorInfo(MonitorFromWindow(hwnd,2),ref info),"Current monitor work area");
+            var max=Field<Button>(window,"maximizeButton");
+            window.ShowActivated=true; window.ShowInTaskbar=true; window.Title="雷云 Lite · 最大化隔离预览"; window.Activate(); Pump();
+            hwnd=new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            try {
+            for(int i=0;i<2;i++) {
+                max.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(150);
+                var bounds=new ShellWindow.NativeRect(); Check(window.WindowState==WindowState.Maximized && GetWindowRect(hwnd,out bounds),"Native maximize");
+                Check(bounds.Left>=info.Work.Left-1 && bounds.Top>=info.Work.Top-1 && bounds.Right<=info.Work.Right+1 && bounds.Bottom<=info.Work.Bottom+1,"Maximized physical window extends into taskbar: "+bounds.Left+","+bounds.Top+","+bounds.Right+","+bounds.Bottom);
+                foreach(var button in Field<Button[]>(window,"navigation").Skip(2)) {
+                    var top=button.PointToScreen(new Point());var bottom=button.PointToScreen(new Point(button.ActualWidth,button.ActualHeight));
+                    Check(button.IsVisible && top.Y>=info.Work.Top && bottom.Y<info.Work.Bottom-3,"Settings/Updates and bottom spacing clipped");
+                }
+                if(i==0) {
+                    var wait=System.Diagnostics.Stopwatch.StartNew();
+                    if(GetForegroundWindow()!=hwnd) Console.WriteLine("WAIT: click the Leiyun Lite maximized isolated preview within 60 seconds; no input is sent; hwnd="+hwnd+" foreground="+GetForegroundWindow());
+                    while(GetForegroundWindow()!=new System.Windows.Interop.WindowInteropHelper(window).Handle && wait.ElapsedMilliseconds<60000) Pump(50);
+                    hwnd=new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                    Check(GetForegroundWindow()==hwnd,"Demo must be foreground for taskbar screenshot");
+                    int width=info.Monitor.Right-info.Monitor.Left,height=info.Monitor.Bottom-info.Monitor.Top;
+                    using(var bitmap=new System.Drawing.Bitmap(width,height)) {
+                        using(var graphics=System.Drawing.Graphics.FromImage(bitmap)) graphics.CopyFromScreen(info.Monitor.Left,info.Monitor.Top,0,0,new System.Drawing.Size(width,height));
+                        bitmap.Save(Path.Combine(artifacts,"maximized-taskbar.png"),System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                    Capture(window,"maximized-navigation");
+                }
+                max.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Pump();Check(window.WindowState==WindowState.Normal,"Native restore");
+            }
+            } finally { window.WindowState=WindowState.Normal; window.ShowActivated=false; window.ShowInTaskbar=false; Pump(); }
+        }
         private static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
         private static T Field<T>(object o, string name) { return (T)o.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(o); }
         private static void Call(object o, string name, params object[] args) { o.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(o, args); }
@@ -122,8 +179,8 @@ namespace RazerBatteryTray.Desktop
                     Check(element.Opacity == 1 && !element.HasAnimatedProperties && move.X == 0 && !move.HasAnimatedProperties && scale.ScaleX == 1 && !scale.HasAnimatedProperties && color.Color == Colors.Blue && !color.HasAnimatedProperties, "Motion clocks remain");
                     bool completed = false; Ui.ReducedMotion = false; UiMotion.FadeOut(element, () => completed = true); Ui.ReducedMotion = true;
                     Check(completed && element.Opacity == 0 && !element.HasAnimatedProperties, "Reduced motion must complete a closing fade");
-                    var button = Ui.Button("Stop interrupted press", () => { }); var pressed = (ScaleTransform)button.RenderTransform;
-                    Ui.ReducedMotion = false; UiMotion.Press(pressed, true); UiMotion.Stop(button); Ui.ReducedMotion = true;
+                    var button = Ui.Button("Stop interrupted press", () => { }); var pressed = UiMotion.Transform(UiMotion.ButtonVisual(button)).Press;
+                    Ui.ReducedMotion = false; UiMotion.Press(button, true); UiMotion.Stop(button); Ui.ReducedMotion = true;
                     Check(pressed.ScaleX == 1 && pressed.ScaleY == 1 && !pressed.HasAnimatedProperties, "Stopped press destination returned after reducing motion");
                 });
                 Test("InfoTip / WarningTip and Snackbar", () => {
@@ -154,6 +211,8 @@ namespace RazerBatteryTray.Desktop
                     max.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(); Check(window.WindowState == WindowState.Maximized, "Maximize");
                     max.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(); Check(window.WindowState == WindowState.Normal, "Restore");
                 });
+                Test("Work-area physical geometry: four taskbar edges and negative secondary monitor",WorkAreaGeometry);
+                Test("Native current-monitor maximize, full bottom navigation, taskbar screenshot and twice restore",()=>MaximizeWorkArea(window));
                 string[] modes = { "wide", "medium", "compact", "minimum" };
                 // Stage C now guards dirty-to-bindings navigation; keep this layout fixture saved.
                 Check(window.SaveMacros(), "Layout fixture could not save");

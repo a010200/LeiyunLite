@@ -1,0 +1,15 @@
+{
+  "commit": "477f4d6d3ab7e9deb6310d5bd3742560c5cbe80d",
+  "sha256": {
+    "daemon/openrazer_daemon/dbus_services/dbus_methods/all.py": "df5ef497b383f70caec74a7de5a9cd80c72a05d739a63a869b7c40fd0f0fff70",
+    "daemon/openrazer_daemon/dbus_services/dbus_methods/nagahex.py": "ffa45ad0a09b68eb83ce3a6c52f0edefc813c2955dd2565aeb47272f8b6bfbb7",
+    "daemon/openrazer_daemon/hardware/device_base.py": "7dcece1e1d9afb84d672f3995acd0cb5f24e8e908f212dba2601a50f4fab362d",
+    "daemon/openrazer_daemon/hardware/mouse.py": "6e55fbb5a05b783f4c3ac929ac73bf4f337664eb1da5904999443b48430e77a5",
+    "driver/razerchromacommon.c": "23bc58cf7a1d8c91a6f397087b55ff897340c68d76be48e01f2e2b9274d8c9bf",
+    "driver/razerchromacommon.h": "bb2b0417355b27ce3eb857e941c1a834366265f8ff38e0bd1b1d343fd803468c",
+    "driver/razercommon.c": "984c3f95cba20710e84f3eed8a26b1e2eddf0f8b6e5fe8bca51a32166744509e",
+    "driver/razermouse_driver.c": "6489dcdfc3cd31f284f379b332882f91beb2fe38bd7b1f3c8e8c05bdf2b3d562",
+    "driver/razermouse_driver.h": "dac1063ae7a74d689b1d4915cae61ef5f4d940d160bf9196533715d31b4923a4",
+    "LICENSES/GPL-2.0-or-later.txt": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+  }
+}

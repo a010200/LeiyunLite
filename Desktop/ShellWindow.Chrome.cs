@@ -12,8 +12,14 @@ namespace RazerBatteryTray.Desktop
         private Button maximizeButton;
         private bool captionPressed;
         private const int HitMaxButton = 9;
+        private const int GetMinMaxInfoMessage = 0x0024, MonitorDefaultToNearest = 2;
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private struct OsVersion { internal int Size, Major, Minor, Build, Platform; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] internal string Text; }
-        [StructLayout(LayoutKind.Sequential)] private struct NativePoint { internal int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] internal struct NativePoint { internal int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] internal struct NativeRect { internal int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)] private struct MonitorInfo { internal int Size; internal NativeRect Monitor, Work; internal int Flags; }
+        [StructLayout(LayoutKind.Sequential)] internal struct MinMaxInfo { internal NativePoint Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize; }
+        [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr window, int flags);
+        [DllImport("user32.dll", EntryPoint="GetMonitorInfoW")] private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
         [StructLayout(LayoutKind.Sequential)] private struct MouseTracking { internal int Size, Flags; internal IntPtr Window; internal int HoverTime; }
         [DllImport("ntdll.dll", CharSet = CharSet.Unicode)] private static extern int RtlGetVersion(ref OsVersion version);
         [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
@@ -33,8 +39,28 @@ namespace RazerBatteryTray.Desktop
         }
         private void MaximizeOrRestore() { WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; }
         private void CaptionHover(bool hover) { if (maximizeButton != null) maximizeButton.Background = Ui.Brush(hover ? "ControlHoverBackground" : "WindowBackground"); }
+        internal static bool ApplyMonitorWorkArea(ref MinMaxInfo limits,NativeRect monitor,NativeRect work)
+        {
+            int width=work.Right-work.Left, height=work.Bottom-work.Top;
+            if(width<=0 || height<=0) return false;
+            // Win32 physical pixels, relative to the window's current monitor.
+            limits.MaxPosition=new NativePoint { X=work.Left-monitor.Left,Y=work.Top-monitor.Top };
+            limits.MaxSize=limits.MaxTrackSize=new NativePoint { X=width,Y=height };
+            return true;
+        }
         private IntPtr ChromeMessage(IntPtr hwnd, int message, IntPtr wparam, IntPtr lparam, ref bool handled)
         {
+            if(message==GetMinMaxInfoMessage) {
+                var monitor=MonitorFromWindow(hwnd,MonitorDefaultToNearest);
+                var info=new MonitorInfo { Size=Marshal.SizeOf(typeof(MonitorInfo)) };
+                if(lparam!=IntPtr.Zero && monitor!=IntPtr.Zero && GetMonitorInfo(monitor,ref info)) {
+                    var limits=(MinMaxInfo)Marshal.PtrToStructure(lparam,typeof(MinMaxInfo));
+                    if(ApplyMonitorWorkArea(ref limits,info.Monitor,info.Work)) {
+                        Marshal.StructureToPtr(limits,lparam,false); handled=true;
+                    }
+                }
+                return IntPtr.Zero;
+            }
             if (!SupportsSnapMenu) return IntPtr.Zero; // Windows 10 keeps the existing WPF chrome path.
             if (message == 0x0084 && InMaximizeButton(ScreenPoint(lparam))) { handled = true; return new IntPtr(HitMaxButton); }
             if (message == 0x00A0) {

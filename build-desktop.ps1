@@ -1,4 +1,4 @@
-param([switch]$Test, [switch]$Regression, [switch]$Hardware, [string]$OutputDirectory = 'bin\Desktop1.2.8')
+param([switch]$Test, [switch]$Regression, [switch]$Hardware, [string]$OutputDirectory = 'bin\Desktop1.2.9')
 $ErrorActionPreference = 'Stop'
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $wpf = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF'

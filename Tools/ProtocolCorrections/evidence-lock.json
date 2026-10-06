@@ -1,0 +1,46 @@
+{
+  "reviewed_on": "2026-10-06",
+  "inputs": {
+    "devices.ts": {
+      "url": "https://raw.githubusercontent.com/OpenMouse-Project/mouse-protocol/ddcb173fbac224c74741fa4d3c835de54135fdb3/src/razer/devices.ts",
+      "bytes": 35864,
+      "sha256": "ff2dbb9c7caa8e0d0499902703ac3a9e72ff59e888537764a4479802ecf89375"
+    },
+    "razer-testing.md": {
+      "url": "https://raw.githubusercontent.com/OpenMouse-Project/mouse-protocol/ddcb173fbac224c74741fa4d3c835de54135fdb3/docs/razer-testing.md",
+      "bytes": 51781,
+      "sha256": "6d922d8df11ba0a1827aca4fbd7f415655fbdb58da081d7fa4f59082f81ef499"
+    },
+    "diamondback.md": {
+      "url": "https://raw.githubusercontent.com/OpenMouse-Project/mouse-protocol/ddcb173fbac224c74741fa4d3c835de54135fdb3/captures/razer-diamondback-chroma/README.md",
+      "bytes": 830,
+      "sha256": "8004b150410125368a245ef86aa279c5c169f567a156ea38bd12302d62ecd9f3"
+    },
+    "devices.test.ts": {
+      "url": "https://raw.githubusercontent.com/OpenMouse-Project/mouse-protocol/ddcb173fbac224c74741fa4d3c835de54135fdb3/src/drivers/razer/devices.test.ts",
+      "bytes": 27227,
+      "sha256": "04257aa044079858d795faa6a754da5fefa8463c5eac6bae32ef45b12daf4324"
+    },
+    "naga-design.md": {
+      "url": "https://raw.githubusercontent.com/Bmwascher/razer-naga-companion/abe5858a1872ef50ad6d6b95428e12580ab6ef3e/docs/superpowers/specs/2026-08-19-naga-v3pro-dual-support-design.md",
+      "bytes": 8704,
+      "sha256": "dfd0941bba35205b6c3d984da0bd557727068011997d9a608e4e1e7b10bd5fef"
+    },
+    "naga-device.cs": {
+      "url": "https://raw.githubusercontent.com/Bmwascher/razer-naga-companion/abe5858a1872ef50ad6d6b95428e12580ab6ef3e/src/NagaBatteryTray/Hid/RazerDevice.cs",
+      "bytes": 16573,
+      "sha256": "ae9a38c6959680b121aa3430be802d0af84c08f132053ce3160922f3596d8569"
+    },
+    "clicksync-razer.js": {
+      "url": "https://raw.githubusercontent.com/Nuitfanee/ClickSync/9c3ad10baa964c507ea0714e72bb9c47b3d591c2/src/protocols/protocol_api_razer.js",
+      "bytes": 158402,
+      "sha256": "73bb3e7093862ff27ca6fcb20c44f6d8060b3ffccc835debf6eb318e0b8ec162"
+    },
+    "deathadder-official.pdf": {
+      "url": "https://dl.razerzone.com/master-guides/RazerSynapse3/DEATHADDERV3PRO-00000182-en.pdf",
+      "bytes": 1567256,
+      "sha256": "2eb33a3fffe263135ae75494fcbb6b7f1c52555f40954284612add8baf135e31",
+      "role": "Official DeathAdder V3 Pro 30000 DPI specification; reviewed 2026-10-06"
+    }
+  }
+}
