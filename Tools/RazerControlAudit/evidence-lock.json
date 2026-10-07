@@ -1,0 +1,214 @@
+{
+  "audit_date": "2026-10-06",
+  "sources": [
+    {
+      "project": "openmouse",
+      "repository": "https://github.com/OpenMouse-Project/mouse-protocol",
+      "commit": "ddcb173fbac224c74741fa4d3c835de54135fdb3",
+      "audit_date": "2026-10-06",
+      "accessible": true,
+      "license": "AGPL-3.0",
+      "facts_used": "PID-scoped candidate facts and safe read-only discovery concept; codec/capability crosscheck; no third-party function body or runtime dependency",
+      "files": [
+        {
+          "path": "docs/razer-testing.md",
+          "sha256": "6d922d8df11ba0a1827aca4fbd7f415655fbdb58da081d7fa4f59082f81ef499",
+          "bytes": 51781,
+          "url": "https://github.com/OpenMouse-Project/mouse-protocol/blob/ddcb173fbac224c74741fa4d3c835de54135fdb3/docs/razer-testing.md"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "429cc8696668f427bbce064e7527bc1ed0f74ad0e99f44419af22836993d73b3",
+          "bytes": 33449,
+          "url": "https://github.com/OpenMouse-Project/mouse-protocol/blob/ddcb173fbac224c74741fa4d3c835de54135fdb3/LICENSE"
+        },
+        {
+          "path": "src/drivers/razer/hid.ts",
+          "sha256": "22fdf5d087ca62f53822785191a9fe63f339a74fc8ca4ce72b29af93ddd3f047",
+          "bytes": 55739,
+          "url": "https://github.com/OpenMouse-Project/mouse-protocol/blob/ddcb173fbac224c74741fa4d3c835de54135fdb3/src/drivers/razer/hid.ts"
+        },
+        {
+          "path": "src/drivers/razer/viper-v4-pro-hid.ts",
+          "sha256": "5d6abd88244cb72d049d86a317d11da92fcd5e30a2d08336d11befa8f23513bb",
+          "bytes": 7984,
+          "url": "https://github.com/OpenMouse-Project/mouse-protocol/blob/ddcb173fbac224c74741fa4d3c835de54135fdb3/src/drivers/razer/viper-v4-pro-hid.ts"
+        },
+        {
+          "path": "src/drivers/vendors.ts",
+          "sha256": "057ae7ed350b33a7ffae3437704f45935e9722aa77245ae4abad4a83c7de0c7c",
+          "bytes": 41844,
+          "url": "https://github.com/OpenMouse-Project/mouse-protocol/blob/ddcb173fbac224c74741fa4d3c835de54135fdb3/src/drivers/vendors.ts"
+        },
+        {
+          "path": "src/razer/devices.ts",
+          "sha256": "ff2dbb9c7caa8e0d0499902703ac3a9e72ff59e888537764a4479802ecf89375",
+          "bytes": 35864,
+          "url": "https://github.com/OpenMouse-Project/mouse-protocol/blob/ddcb173fbac224c74741fa4d3c835de54135fdb3/src/razer/devices.ts"
+        }
+      ]
+    },
+    {
+      "project": "clicksync",
+      "repository": "https://github.com/Nuitfanee/ClickSync",
+      "commit": "9c3ad10baa964c507ea0714e72bb9c47b3d591c2",
+      "audit_date": "2026-10-06",
+      "accessible": true,
+      "license": "GPL-2.0",
+      "facts_used": "PID-scoped candidate facts and safe read-only discovery concept; codec/capability crosscheck; no third-party function body or runtime dependency",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "bytes": 18092,
+          "url": "https://github.com/Nuitfanee/ClickSync/blob/9c3ad10baa964c507ea0714e72bb9c47b3d591c2/LICENSE"
+        },
+        {
+          "path": "src/core/device_runtime.js",
+          "sha256": "0cb41d3b8d11918222a2eef10f3ea91caef476d95f47394d8a0c67416ba60cf8",
+          "bytes": 43765,
+          "url": "https://github.com/Nuitfanee/ClickSync/blob/9c3ad10baa964c507ea0714e72bb9c47b3d591c2/src/core/device_runtime.js"
+        },
+        {
+          "path": "src/protocols/protocol_api_razer.js",
+          "sha256": "73bb3e7093862ff27ca6fcb20c44f6d8060b3ffccc835debf6eb318e0b8ec162",
+          "bytes": 158402,
+          "url": "https://github.com/Nuitfanee/ClickSync/blob/9c3ad10baa964c507ea0714e72bb9c47b3d591c2/src/protocols/protocol_api_razer.js"
+        },
+        {
+          "path": "tools/test_razer_connection_plans.js",
+          "sha256": "a56fd224c67e06a876dd69567062b93d1c4c90a8dc90971a5d88749296b8fcbc",
+          "bytes": 4851,
+          "url": "https://github.com/Nuitfanee/ClickSync/blob/9c3ad10baa964c507ea0714e72bb9c47b3d591c2/tools/test_razer_connection_plans.js"
+        }
+      ]
+    },
+    {
+      "project": "mouse_tray",
+      "repository": "https://github.com/Fan4Metal/mouse_tray",
+      "commit": "efe142d1a6a8b25caa83a745b470e9317acd2087",
+      "audit_date": "2026-10-06",
+      "accessible": true,
+      "license": "UNKNOWN",
+      "facts_used": "PID-scoped candidate facts and safe read-only discovery concept; codec/capability crosscheck; no third-party function body or runtime dependency",
+      "files": [
+        {
+          "path": "mouse_tray/drivers/vendor/razer.py",
+          "sha256": "25083685b94756ed9de1bbfb9497cf6ffbd0f73a13771dd35bbd832821b3c4b8",
+          "bytes": 3629,
+          "url": "https://github.com/Fan4Metal/mouse_tray/blob/efe142d1a6a8b25caa83a745b470e9317acd2087/mouse_tray/drivers/vendor/razer.py"
+        }
+      ]
+    },
+    {
+      "project": "razerqdhid",
+      "repository": "https://github.com/geezmolycos/razerqdhid",
+      "commit": "4363a8836ab970c712fa8f2a9dd530a7e7bc5011",
+      "audit_date": "2026-10-06",
+      "accessible": true,
+      "license": "MIT",
+      "facts_used": "PID-scoped candidate facts and safe read-only discovery concept; codec/capability crosscheck; no third-party function body or runtime dependency",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "fe336e903832bf5cfd3a56644ed424e70e390593ab6b5a0600e48e305f53905d",
+          "bytes": 1068,
+          "url": "https://github.com/geezmolycos/razerqdhid/blob/4363a8836ab970c712fa8f2a9dd530a7e7bc5011/LICENSE"
+        },
+        {
+          "path": "public/py/qdrazer/device.py",
+          "sha256": "ea62b75ab30843019a5a89e577028c54492510c36019a0940153d2135a03f536",
+          "bytes": 14031,
+          "url": "https://github.com/geezmolycos/razerqdhid/blob/4363a8836ab970c712fa8f2a9dd530a7e7bc5011/public/py/qdrazer/device.py"
+        },
+        {
+          "path": "public/py/qdrazer/protocol.py",
+          "sha256": "024d567558a5c499c7a54f530ee8a8044baeaefda873bce6e3923ca7b5df0a34",
+          "bytes": 18177,
+          "url": "https://github.com/geezmolycos/razerqdhid/blob/4363a8836ab970c712fa8f2a9dd530a7e7bc5011/public/py/qdrazer/protocol.py"
+        }
+      ]
+    },
+    {
+      "project": "naga",
+      "repository": "https://github.com/Bmwascher/razer-naga-companion",
+      "commit": "abe5858a1872ef50ad6d6b95428e12580ab6ef3e",
+      "audit_date": "2026-10-06",
+      "accessible": true,
+      "license": "MIT",
+      "facts_used": "PID-scoped candidate facts and safe read-only discovery concept; codec/capability crosscheck; no third-party function body or runtime dependency",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "999486377650e975302745c083a93f2b2740783ea16628bacfd95cc173e7b1ed",
+          "bytes": 1072,
+          "url": "https://github.com/Bmwascher/razer-naga-companion/blob/abe5858a1872ef50ad6d6b95428e12580ab6ef3e/LICENSE"
+        },
+        {
+          "path": "src/NagaBatteryTray/Hid/RazerDevice.cs",
+          "sha256": "ae9a38c6959680b121aa3430be802d0af84c08f132053ce3160922f3596d8569",
+          "bytes": 16573,
+          "url": "https://github.com/Bmwascher/razer-naga-companion/blob/abe5858a1872ef50ad6d6b95428e12580ab6ef3e/src/NagaBatteryTray/Hid/RazerDevice.cs"
+        },
+        {
+          "path": "src/NagaBatteryTray/Hid/RazerProtocol.cs",
+          "sha256": "d99f15a085665fbd3ecc80c093ee62fe55cd3446bd9ec711ae56d24a1ac069a3",
+          "bytes": 17385,
+          "url": "https://github.com/Bmwascher/razer-naga-companion/blob/abe5858a1872ef50ad6d6b95428e12580ab6ef3e/src/NagaBatteryTray/Hid/RazerProtocol.cs"
+        }
+      ]
+    },
+    {
+      "project": "openrazer",
+      "repository": "https://github.com/openrazer/openrazer",
+      "commit": "477f4d6d3ab7e9deb6310d5bd3742560c5cbe80d",
+      "audit_date": "2026-10-06",
+      "accessible": true,
+      "license": "GPL-2.0-or-later",
+      "facts_used": "PID-scoped candidate facts and safe read-only discovery concept; codec/capability crosscheck; no third-party function body or runtime dependency",
+      "files": [
+        {
+          "path": "daemon/openrazer_daemon/hardware/mouse.py",
+          "sha256": "6e55fbb5a05b783f4c3ac929ac73bf4f337664eb1da5904999443b48430e77a5",
+          "bytes": 90268,
+          "url": "https://github.com/openrazer/openrazer/blob/477f4d6d3ab7e9deb6310d5bd3742560c5cbe80d/daemon/openrazer_daemon/hardware/mouse.py"
+        },
+        {
+          "path": "driver/razercommon.c",
+          "sha256": "984c3f95cba20710e84f3eed8a26b1e2eddf0f8b6e5fe8bca51a32166744509e",
+          "bytes": 8878,
+          "url": "https://github.com/openrazer/openrazer/blob/477f4d6d3ab7e9deb6310d5bd3742560c5cbe80d/driver/razercommon.c"
+        },
+        {
+          "path": "driver/razermouse_driver.c",
+          "sha256": "6489dcdfc3cd31f284f379b332882f91beb2fe38bd7b1f3c8e8c05bdf2b3d562",
+          "bytes": 408936,
+          "url": "https://github.com/openrazer/openrazer/blob/477f4d6d3ab7e9deb6310d5bd3742560c5cbe80d/driver/razermouse_driver.c"
+        },
+        {
+          "path": "driver/razermouse_driver.h",
+          "sha256": "dac1063ae7a74d689b1d4915cae61ef5f4d940d160bf9196533715d31b4923a4",
+          "bytes": 8316,
+          "url": "https://github.com/openrazer/openrazer/blob/477f4d6d3ab7e9deb6310d5bd3742560c5cbe80d/driver/razermouse_driver.h"
+        },
+        {
+          "path": "LICENSES/GPL-2.0-or-later.txt",
+          "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3",
+          "bytes": 17337,
+          "url": "https://github.com/openrazer/openrazer/blob/477f4d6d3ab7e9deb6310d5bd3742560c5cbe80d/LICENSES/GPL-2.0-or-later.txt"
+        }
+      ]
+    }
+  ],
+  "official_sources": [
+    {
+      "url": "https://www.razer.com/blog/razer-deathadder-v4-pro-now-supported-on-razer-synapse-web",
+      "fact": "Official DA V4 browser support; does not specify native HID shape"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/hidpi/ns-hidpi-_hidp_caps",
+      "fact": "Usage/UsagePage describe top-level collection; feature length includes report ID"
+    }
+  ],
+  "source_code_copy": false
+}

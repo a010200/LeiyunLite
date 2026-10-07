@@ -20,7 +20,7 @@ namespace RazerBatteryTray.Tests
             Test("Unknown, descriptor rejection and cached telemetry never grant writes", NegativeReads);
             Test("Whole catalog Rotation exclusion and exact local descriptor guard", RotationExclusion);
             Test("Encoders reject unknown values; legacy byte exact round trips", Encoders);
-            if (!readOnly) { RunWriteTests(); RunSupplementalTests(); RunCorrectionTests(); RunUiTests(); }
+            if (!readOnly) { RunWriteTests(); RunSupplementalTests(); RunCorrectionTests(); RunControlPathTests(); RunUiTests(); }
             Console.WriteLine("RESULT: " + passed + " passed, " + failed + " failed");
             return failed == 0 ? 0 : 1;
         }

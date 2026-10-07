@@ -126,7 +126,7 @@ namespace RazerBatteryTray.Tests
                 var a=new SupplementalFake(pid,91);var b=new SupplementalFake(pid,91); b.Descriptor.ContainerId=a.Descriptor.ContainerId;
                 a.Descriptor.Usage=b.Descriptor.Usage=3; var c=CorrectionsClient(a,b);var r=c.QueryRazerDeviceInfo();
                 Check(r.DpiKnown && r.ProtocolReason=="ambiguous-control-path" && !r.IsWriteSupported && !c.SetDpiTransactional(pid,1600,r.DeviceKey,r.InterfacePath).WriteAttempted && !c.SetPollingTransactional(pid,1000,r.DeviceKey,r.InterfacePath).WriteAttempted && a.Writes+b.Writes==0,"Two valid paths same instance: no write");
-                b.ReadFault=7; r=c.QueryRazerDeviceInfo(); Check(r.IsWriteSupported,"Only strict valid response selects unique path");
+                b.ReadFault=7; c.InvalidateTarget(); r=c.QueryRazerDeviceInfo(); Check(r.IsWriteSupported,"Explicit refresh rechecks pool; only strict valid response selects unique path");
                 var bad=new SupplementalFake(pid,90); r=CorrectionsClient(bad).QueryRazerDeviceInfo();Check(bad.Requests.Count==0 && !r.IsWriteSupported,"90 bytes no Windows grant");
                 bad=new SupplementalFake(pid,91);bad.Descriptor.ProductId=0x7fff;r=CorrectionsClient(bad).QueryRazerDeviceInfo();Check(bad.Requests.Count==0,"Wrong PID no command");
             }

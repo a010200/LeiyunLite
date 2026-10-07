@@ -26,8 +26,6 @@ namespace RazerBatteryTray.Desktop
         internal MacroLibrary Draft;
         internal bool DraftDirty;
         internal MouseBatteryInfo Reading = new MouseBatteryInfo();
-        internal readonly UpstreamWriteConsent PerformanceConsent = new UpstreamWriteConsent();
-        internal event Action DrawerClosedEvent, DrawerReplacedEvent;
         internal readonly MacroController Macros;
         private readonly SettingsStore legacyStore = new SettingsStore(throwOnSave: true);
         private readonly DesktopSettings store;
@@ -231,7 +229,6 @@ namespace RazerBatteryTray.Desktop
         }
         internal void OpenDrawer(string title, UIElement content, Func<LayoutMode, double> preferredWidth = null)
         {
-            if (DrawerReplacedEvent != null) DrawerReplacedEvent();
             if (!DrawerOpen) previousFocus = Keyboard.FocusedElement as FrameworkElement;
             drawerPreferredWidth = preferredWidth;
             if (activeDrawer != null) Ui.Stop(activeDrawer);
@@ -337,7 +334,6 @@ namespace RazerBatteryTray.Desktop
             if (activeDrawerHost != null) Ui.Stop(activeDrawerHost);
             overlay.Visibility = Visibility.Collapsed; overlay.Children.Clear();
             activeDrawer = null; activeDrawerHost = null; drawerCollapseButton = null; drawerPreferredWidth = null;
-            if (DrawerClosedEvent != null) DrawerClosedEvent();
             if (macroPage != null) macroPage.DrawerClosed();
             var focus = previousFocus; previousFocus = null; if (focus != null) focus.Focus();
         }

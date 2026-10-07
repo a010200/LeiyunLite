@@ -37,13 +37,13 @@ namespace RazerBatteryTray
         private bool IsSelected(IHidDevice device)
         {
             var d = Describe(device);
-            return selected != null && d != null && DeviceCapabilityCatalog.Find(d.ProductId) != null && DeviceCapabilityCatalog.Find(d.ProductId).AcceptsDescriptor(d) && d.InstanceKey == selected.InstanceKey
+            return selected != null && d != null && controlPaths.IsLocked(selected) && DeviceCapabilityCatalog.Find(d.ProductId) != null && DeviceCapabilityCatalog.Find(d.ProductId).AcceptsDescriptor(d) && d.InstanceKey == selected.InstanceKey
                 && string.Equals(d.Path, selected.Path, StringComparison.OrdinalIgnoreCase)
                 && d.VendorId == selected.VendorId && d.ProductId == selected.ProductId && d.Version == selected.Version
                 && d.ReportLength == selected.ReportLength && device.ReportLength == selected.ReportLength
                 && d.UsagePage == selected.UsagePage && d.Usage == selected.Usage;
         }
-        internal void InvalidateTarget() { lock (hidLock) { selected = null; selectedReading = null; selectedDpiReady = selectedPollingReady = selectedStagesReady = false; ClearPerformanceSession(); } }
+        internal void InvalidateTarget() { lock (hidLock) { selected = null; selectedReading = null; selectedDpiReady = selectedPollingReady = selectedStagesReady = false; controlPaths.Clear(); ClearPerformanceSession(); } }
         private static bool ReadStages(IHidDevice d, out int dpi, out int stage, out int[] stages)
         {
             dpi = stage = 0; stages = null; var descriptor = Describe(d);
@@ -61,7 +61,7 @@ namespace RazerBatteryTray
                 IsDonglePresent = identity.Kind == DeviceKind.DedicatedReceiver || identity.Kind == DeviceKind.GenericReceiver,
                 ProtocolStatus = DeviceProtocolStatus.IdentityOnly };
             var p = RazerProtocolProfile.For(d);
-            if (p == null || !p.Capabilities.AcceptsDescriptor(d) || device.ReportLength != d.ReportLength || identity.Kind == DeviceKind.Unknown) return r;
+            if (p == null || !p.Capabilities.AcceptsDescriptor(d) || device == null || device.ReportLength != d.ReportLength || identity.Kind == DeviceKind.Unknown) return r;
             if(!ResolvePerformanceProfile(device,d,out effective)) { r.ProtocolStatus=DeviceProtocolStatus.PresentUnresponsive; return r; }
             ProbePerformance(device,d,r,effective);
             int rotation;
@@ -87,18 +87,51 @@ namespace RazerBatteryTray
                 var choices = new List<MouseBatteryInfo>(); var descriptors = new Dictionary<string, HidDescriptor>();
                 var effectiveProfiles = new Dictionary<string,DeviceCapabilityProfile>();
                 selected = null; selectedReading = null; selectedDpiReady = selectedPollingReady = selectedStagesReady = false;
+                ControlProbeOutcomes.Clear();
+                // First visit snapshots descriptors only, with no protocol traffic.
                 transport.Visit(device => {
-                    var live = Describe(device); if (live == null || !live.IsRazer) return false;
+                    var live=Describe(device); if(live==null || !live.IsRazer) return false;
                     var d=SnapshotDescriptor(live);
-                    var identity = RazerIdentityCatalog.Find(d.ProductId); if (identity.Kind == DeviceKind.Other) return false;
-                    DeviceCapabilityProfile effective;
-                    choices.Add(Probe(device,d,identity,out effective)); descriptors[d.Path]=d; effectiveProfiles[d.Path]=effective; return false;
+                    if(RazerIdentityCatalog.Find(d.ProductId).Kind!=DeviceKind.Other) descriptors[d.Path]=d;
+                    return false;
                 });
-                foreach(var group in choices.Where(r=>r.ProtocolStatus==DeviceProtocolStatus.Ready &&
-                    DeviceCapabilityCatalog.Find(r.ProductId)!=null && DeviceCapabilityCatalog.Find(r.ProductId).DescriptorPolicy==DescriptorPolicy.NagaV3WindowsControl)
-                    .GroupBy(r=>r.ProductId+"|"+r.DeviceKey)) {
-                    if(group.Select(r=>r.InterfacePath).Distinct(StringComparer.OrdinalIgnoreCase).Count()>1)
-                        foreach(var r in group) { r.IsWriteSupported=r.IsDpiWriteSupported=r.IsPollingWriteSupported=false; r.ProtocolReason="ambiguous-control-path"; }
+                var plans=controlPaths.Prepare(descriptors.Values);
+                var readings=new Dictionary<string,MouseBatteryInfo>(StringComparer.OrdinalIgnoreCase);
+                Action<HidDescriptor> probe=d=> {
+                    transport.Visit(device=> {
+                        var live=Describe(device);
+                        if(live==null || TargetSignature(live)!=TargetSignature(d) || device.ReportLength!=d.ReportLength) return false;
+                        DeviceCapabilityProfile effective;
+                        readings[d.Path]=ProbeControl(device,d,out effective); effectiveProfiles[d.Path]=effective;
+                        return true;
+                    });
+                };
+                foreach(var plan in plans) {
+                    foreach(var d in plan.ProbePaths) probe(d);
+                    // A sleeping/failed sentinel waking up must recheck every
+                    // candidate before a unique path can gain permissions again.
+                    if(plan.Cached && !plan.WasConfirmed && !plan.Ambiguous &&
+                        plan.ProbePaths.Any(d=>readings.ContainsKey(d.Path) && readings[d.Path].ProtocolStatus==DeviceProtocolStatus.Ready))
+                        foreach(var d in plan.Candidates.Where(d=>!plan.ProbePaths.Any(x=>TargetSignature(x)==TargetSignature(d)))) probe(d);
+                    var successes=plan.Candidates.Where(d=>readings.ContainsKey(d.Path) && readings[d.Path].ProtocolStatus==DeviceProtocolStatus.Ready).ToArray();
+                    bool ambiguous=controlPaths.Finish(plan,successes);
+                    if(ambiguous) foreach(var d in plan.Candidates) {
+                        MouseBatteryInfo reading;
+                        if(!readings.TryGetValue(d.Path,out reading)) {
+                            DeviceCapabilityProfile ignored;
+                            reading=Probe(null,d,RazerIdentityCatalog.Find(d.ProductId),out ignored); readings[d.Path]=reading;
+                        }
+                        reading.IsWriteSupported=reading.IsDpiWriteSupported=reading.IsPollingWriteSupported=reading.IsRotationWriteSupported=false;
+                        reading.ProtocolReason="ambiguous-control-path";
+                    }
+                }
+                foreach(var d in descriptors.Values) {
+                    MouseBatteryInfo reading;
+                    if(!readings.TryGetValue(d.Path,out reading)) {
+                        DeviceCapabilityProfile ignored;
+                        reading=Probe(null,d,RazerIdentityCatalog.Find(d.ProductId),out ignored);
+                    }
+                    choices.Add(reading);
                 }
                 var result = choices.OrderByDescending(r => r.DeviceKey == preferredKey && RazerProtocolProfile.For(r.ProductId) != null)
                     .ThenByDescending(r => r.ProtocolStatus == DeviceProtocolStatus.Ready)
@@ -147,7 +180,8 @@ namespace RazerBatteryTray
                     }
                     return true;
                 });
-                if(!targetSeen && selectedPerformance!=null && selectedPerformance.TransactionProbePolicy==TransactionProbePolicy.ReadOnlySessionFallback) {
+                if(!targetSeen) {
+                    controlPaths.Clear();
                     ClearPerformanceSession(); selectedDpiReady=selectedPollingReady=selectedStagesReady=false;
                 }
                 value = r; return ok;

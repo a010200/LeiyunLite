@@ -121,9 +121,9 @@ namespace RazerBatteryTray.Desktop
                 int chosen = rate; var button = Ui.Button(rate + " Hz", async () => await CommitRate(chosen), rate == r.PollingRate && !r.IsSleeping);
                 button.Padding = new Thickness(12, 8, 12, 8); button.IsEnabled = CanWritePolling(r) && !writing; ratePanel.Children.Add(button);
             }
-            performanceInfo.Text = "DPI: " + TrustText(r.DpiTrust) + "\n" + Ui.T("回报率: ", "Polling: ") + TrustText(r.PollingTrust);
-            if (cap.AvailableDpi.Length > 0) performanceInfo.Text += "\n" + Ui.T("可精确写入的 DPI: ", "Exact writable DPI: ") + string.Join(", ",cap.AvailableDpi);
-            performanceInfo.Visibility = Visibility.Visible;
+            performanceInfo.Text = cap.AvailableDpi.Length > 0
+                ? Ui.T("可精确写入的 DPI: ", "Exact writable DPI: ") + string.Join(", ",cap.AvailableDpi) : "";
+            performanceInfo.Visibility = cap.AvailableDpi.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (!pendingRotation && !writing && !angle.IsMouseCaptureWithin && !angleValue.IsKeyboardFocusWithin && r.RotationKnown) {
                 updatingRotation = true; angle.Value = r.RotationAngle; angleValue.Text = r.RotationAngle.ToString(CultureInfo.InvariantCulture); updatingRotation = false;
                 rotationEditKey = r.DeviceKey;
@@ -154,12 +154,6 @@ namespace RazerBatteryTray.Desktop
         { return r != null && r.ProtocolStatus == DeviceProtocolStatus.Ready && r.DpiKnown && r.IsDpiWriteSupported && r.DpiTrust >= CapabilityTrust.UpstreamVerified; }
         internal static bool CanWritePolling(MouseBatteryInfo r)
         { return r != null && r.ProtocolStatus == DeviceProtocolStatus.Ready && r.PollingKnown && r.IsPollingWriteSupported && r.PollingTrust >= CapabilityTrust.UpstreamVerified; }
-        internal static string TrustText(CapabilityTrust trust)
-        {
-            return trust == CapabilityTrust.HardwareVerified ? Ui.T("已通过雷云 Lite 实机验证", "Hardware tested in Leiyun Lite") : trust == CapabilityTrust.UpstreamVerified ?
-                Ui.T("社区协议兼容（公开协议证据），本型号未在雷云 Lite 实机验证", "Community protocol compatibility (public evidence); this model is not hardware tested in Leiyun Lite") :
-                Ui.T("已识别设备，暂无安全控制协议", "Device identified; no safe control protocol");
-        }
         private int PreviewDpi(double position)
         {
             int value = DpiScale.FromPosition(position); var cap = DeviceCapabilities.For(shell.Reading.ProductId);
@@ -167,31 +161,6 @@ namespace RazerBatteryTray.Desktop
             int nearest = cap.AvailableDpi[0];
             foreach (int candidate in cap.AvailableDpi) if (Math.Abs(candidate - value) < Math.Abs(nearest - value)) nearest = candidate;
             return nearest;
-        }
-        private async Task<bool> ConfirmUpstream(PerformanceCapability capability,string key,string path)
-        {
-            if (shell.Demo) return true;
-            var reading = shell.Reading;
-            bool allowed = capability == PerformanceCapability.Dpi ? CanWriteDpi(reading) : CanWritePolling(reading);
-            if (!allowed || key != reading.DeviceKey || path != reading.InterfacePath) return false;
-            var trust = capability == PerformanceCapability.Dpi ? reading.DpiTrust : reading.PollingTrust;
-            if (!shell.PerformanceConsent.NeedsConfirmation(key,capability,trust)) return true;
-            var answer = new TaskCompletionSource<bool>();
-            Action cancel = () => answer.TrySetResult(false);
-            EventHandler closed = (s,e) => cancel();
-            string label = capability == PerformanceCapability.Dpi ? "DPI" : Ui.T("回报率", "polling rate");
-            shell.OpenDrawer(Ui.T("社区协议兼容确认", "Community protocol confirmation"), Ui.Stack(
-                Ui.Text(Ui.T("此设备的", "This device's ") + label + Ui.T("兼容性来自公开社区协议证据，尚未由雷云 Lite 在该型号上实机验证。软件会执行写前读取、写后读回和失败恢复。是否继续？", " compatibility comes from public community protocol evidence and has not been hardware tested in Leiyun Lite for this model. The app reads before writing, verifies readback and attempts restoration on failure. Continue?"),14,Ui.Muted),
-                Ui.Button(Ui.T("继续", "Continue"), () => { answer.TrySetResult(true); shell.CloseDrawer(); },true),
-                Ui.Button(Ui.T("取消", "Cancel"),shell.CloseDrawer)));
-            shell.DrawerClosedEvent += cancel; shell.DrawerReplacedEvent += cancel; shell.Closed += closed;
-            bool accepted;
-            try { accepted = await answer.Task; }
-            finally { shell.DrawerClosedEvent -= cancel; shell.DrawerReplacedEvent -= cancel; shell.Closed -= closed; }
-            reading = shell.Reading;
-            allowed = capability == PerformanceCapability.Dpi ? CanWriteDpi(reading) : CanWritePolling(reading);
-            if (!accepted || !allowed || key != reading.DeviceKey || path != reading.InterfacePath) return false;
-            shell.PerformanceConsent.Accept(key,capability); return true;
         }
         private void NoticePerformanceResult(PerformanceWriteResult result,string label)
         {
@@ -215,7 +184,6 @@ namespace RazerBatteryTray.Desktop
             int pid = shell.Reading.ProductId; string targetKey = shell.Reading.DeviceKey, targetPath = shell.Reading.InterfacePath;
             try
             {
-                if (!await ConfirmUpstream(PerformanceCapability.Dpi,targetKey,targetPath)) return;
                 var result = shell.Demo ? null : await Task.Run(() => shell.Device.SetDpiTransactional(pid,value,targetKey,targetPath));
                 NoticePerformanceResult(result,Ui.T("DPI", "DPI"));
             }
@@ -228,7 +196,6 @@ namespace RazerBatteryTray.Desktop
             if (writing || !CanWritePolling(shell.Reading)) return; writing = true; int pid = shell.Reading.ProductId; string targetKey = shell.Reading.DeviceKey, targetPath = shell.Reading.InterfacePath; UpdateReading();
             try
             {
-                if (!await ConfirmUpstream(PerformanceCapability.Polling,targetKey,targetPath)) return;
                 var result = shell.Demo ? null : await Task.Run(() => shell.Device.SetPollingTransactional(pid,rate,targetKey,targetPath));
                 NoticePerformanceResult(result,Ui.T("回报率", "Polling rate"));
             }

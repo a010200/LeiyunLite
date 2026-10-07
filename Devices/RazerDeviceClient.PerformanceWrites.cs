@@ -39,6 +39,7 @@ namespace RazerBatteryTray
             var result = new DpiWriteResult();
             if(string.IsNullOrEmpty(key)) return result;
             lock(hidLock) {
+                if(!VerifyLockedTopology()) return result;
                 var p = SelectedPerformanceProfile;
                 if(p == null || selected.ProductId != pid || !selectedDpiReady || !p.SetDpi || p.Transport != TransportKind.HidFeature90Or91 ||
                     targetStage == 0 && !p.AcceptsDpi(value) || targetStage != 0 && (!p.SetStages || !selectedStagesReady)) return result;
@@ -114,6 +115,7 @@ namespace RazerBatteryTray
         {
             var result=new PollingWriteResult(); if(string.IsNullOrEmpty(key)) return result;
             lock(hidLock) {
+                if(!VerifyLockedTopology()) return result;
                 var p=SelectedPerformanceProfile;
                 if(p==null || selected.ProductId!=pid || !selectedPollingReady || !p.SetPolling || !p.AcceptsRate(value) || p.Transport!=TransportKind.HidFeature90Or91) return result;
                 try { transport.Visit(device => {

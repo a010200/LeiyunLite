@@ -64,17 +64,17 @@ namespace RazerBatteryTray.Desktop
                     Check(top.Children[0] == first && !Find<TextBlock>(window).Any(x => x.Text == "LITE"), "Navigation brand/spacer remains");
                     Check(Math.Abs(first.TranslatePoint(new Point(0, 0), top).Y - first.Margin.Top) < 1, "Navigation kept old brand height");
                 });
-                Test("Supported device hides prose / unknown retains write-disabled hint in both languages", () => {
+                Test("Supported and unknown devices hide prose while independent write gates remain", () => {
                     var previous = window.Reading;
                     try {
                         foreach (string language in new[] { "zh", "en" }) {
                             window.Preferences.Language = language; window.RebuildPages(0); Pump(); var device = Field<DevicePage>(window, "devicePage");
-                            window.Reading = new MouseBatteryInfo { ProductId = 0x00DF, IsConnected = true, IsWriteSupported = true, Dpi = 1600, PollingRate = 1000, DeviceKey = "fake-supported" };
+                            window.Reading = new MouseBatteryInfo { ProductId = 0x00DF, IsConnected = true, IsWriteSupported = true, IsDpiWriteSupported = true, IsPollingWriteSupported = true, DpiKnown = true, PollingKnown = true, ProtocolStatus = DeviceProtocolStatus.Ready, DpiTrust = CapabilityTrust.UpstreamVerified, PollingTrust = CapabilityTrust.UpstreamVerified, Dpi = 1600, PollingRate = 1000, DeviceKey = "fake-supported" };
                             device.UpdateReading(); Pump(); var hint = Field<TextBlock>(device, "performanceInfo");
                             Check(hint.Visibility == Visibility.Collapsed && hint.Text == "" && Field<Slider>(device, "dpi").IsEnabled && Field<WrapPanel>(device, "ratePanel").Children.Count == 3, "Supported capability UI changed");
                             window.Reading = new MouseBatteryInfo { ProductId = 0xFFFF, IsConnected = true, DeviceKey = "fake-unknown" };
                             device.UpdateReading(); Pump();
-                            Check(hint.Visibility == Visibility.Visible && hint.Text == (language == "zh" ? "尚无此设备 / 接收器组合的可靠能力表，暂不开放写入。" : "No verified capability profile for this device / receiver; writes are disabled.") && !Field<Slider>(device, "dpi").IsEnabled && Field<WrapPanel>(device, "ratePanel").Children.Count == 0, "Unknown device lost write-disabled hint");
+                            Check(hint.Visibility == Visibility.Collapsed && hint.Text == "" && !Field<Slider>(device, "dpi").IsEnabled && Field<WrapPanel>(device, "ratePanel").Children.Count == 0, "Unknown remains write-disabled without prose");
                             Capture(window, "unknown-device-" + language);
                             window.Reading.ProductId = 0x00DF; device.UpdateReading(); Pump(); Check(hint.Visibility == Visibility.Collapsed && hint.Text == "", "Stale unknown hint");
                         }

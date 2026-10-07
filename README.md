@@ -2,15 +2,15 @@
 
 面向部分雷蛇鼠标的 Windows 桌面工具：查看电量、调整 DPI 与回报率，编辑和录制本地宏，再把它们绑定到按键或滚轮。
 
-**当前版本：v1.2.9** · Windows x64 · C# / WPF · .NET Framework 4.8 · [MIT License](LICENSE)
+**当前公开稳定版：v1.3.0** · Windows x64 · C# / WPF · .NET Framework 4.8 · [MIT License](LICENSE)
 
-> [v1.2.9 版本说明](docs/RELEASE-v1.2.9.md) · [下载 v1.2.9](https://github.com/a010200/LeiyunLite/releases/tag/v1.2.9) · [安装与自动更新](docs/INSTALLING.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/a010200/LeiyunLite/issues)
+> [v1.3.0 版本说明](docs/RELEASE-v1.3.0.md) · [下载 v1.3.0](https://github.com/a010200/LeiyunLite/releases/tag/v1.3.0) · [安装与自动更新](docs/INSTALLING.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/a010200/LeiyunLite/issues)
 
 | 下载 | 适合谁 |
 |---|---|
-| [安装版 EXE](https://github.com/a010200/LeiyunLite/releases/download/v1.2.9/LeiyunLite-v1.2.9-Setup-x64.exe) | 希望有快捷方式、卸载入口和应用内安装更新 |
-| [便携版 ZIP](https://github.com/a010200/LeiyunLite/releases/download/v1.2.9/LeiyunLite-v1.2.9-win-x64.zip) | 不安装，完整解压后直接运行；升级时手动替换程序 |
-| [SHA256 校验文件](https://github.com/a010200/LeiyunLite/releases/download/v1.2.9/SHA256SUMS.txt) | 核对下载文件完整性 |
+| [安装版 EXE](https://github.com/a010200/LeiyunLite/releases/download/v1.3.0/LeiyunLite-v1.3.0-Setup-x64.exe) | 希望有快捷方式、卸载入口和应用内安装更新 |
+| [便携版 ZIP](https://github.com/a010200/LeiyunLite/releases/download/v1.3.0/LeiyunLite-v1.3.0-win-x64.zip) | 不安装，完整解压后直接运行；升级时手动替换程序 |
+| [SHA256 校验文件](https://github.com/a010200/LeiyunLite/releases/download/v1.3.0/SHA256SUMS.txt) | 核对下载文件完整性 |
 
 `update-x64.zip` 和 `update.json` 是供安装版自动更新使用的附件，不是便携包。GitHub 的 `Source code` 是源码，不是可以直接运行的软件。
 
@@ -53,7 +53,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 运行环境：**Windows 10/11 x64，.NET Framework 4.8**。本轮验证环境是 Windows 10 x64；Windows 11、多显示器和混合缩放仍需进一步实机验证。
 
 1. 从上方选择安装版或便携版。若旧版仍在运行，先保存宏草稿、停止录制/播放，再从托盘菜单选择“退出”。
-2. **安装版**：运行 `LeiyunLite-v1.2.9-Setup-x64.exe`，之后使用安装生成的快捷方式。**便携版**：完整解压 `LeiyunLite-v1.2.9-win-x64.zip` 到新目录，再运行 `LeiyunLite.Desktop.exe`。两种版本不要同时运行。安装目录的 `LeiyunLite.exe` 是新的固定启动入口，不是上游旧软件。
+2. **安装版**：运行 `LeiyunLite-v1.3.0-Setup-x64.exe`，之后使用安装生成的快捷方式。**便携版**：完整解压 `LeiyunLite-v1.3.0-win-x64.zip` 到新目录，再运行 `LeiyunLite.Desktop.exe`。两种版本不要同时运行。安装目录的 `LeiyunLite.exe` 是新的固定启动入口，不是上游旧软件。
 3. 在“设备”页查看状态。型号未明确识别时，不会开放未经确认的 DPI/回报率写入。
 4. v1.1.0 及更早便携版不会自动变成安装版，需要手动运行一次安装程序；个人宏和设置沿用原位置。便携版更换路径后，如需自启动，请在设置中重新启用“开机自启动”。
 
@@ -68,6 +68,14 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 ```
 
 安全预览使用模拟设备，不读写鼠标、不监听键鼠录制、不执行宏输入或命令、不保存设置。**它只能看界面，不能用于测试真实录制或硬件控制。**
+
+### v1.3.0
+
+- DPI 与回报率在兼容设备实时验证通过后可直接应用，移除首次写入确认。
+- 精简性能区域，只保留离散 DPI 的实际输入限制。
+- 改进部分雷蛇鼠标的自动控制接口识别，唯一实时响应通过后才允许应用；多个接口响应时暂停写入。
+
+详见[版本说明](docs/RELEASE-v1.3.0.md)。
 
 ### v1.2.9
 
@@ -107,7 +115,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 - 管理员窗口、系统安全桌面、游戏原始输入与反作弊环境不保证兼容，不提供绕过机制。
 - 宏可包含启动程序、网址或运行命令的动作。使用他人提供的宏前，先检查其内容。
 
-当前本地版本的变化与边界见[v1.2.9 说明](docs/RELEASE-v1.2.9.md)。[v1.1.0 使用与升级说明](docs/RELEASE-v1.1.0.md)及 R3/R4/R5 文档保留为历史记录。
+当前本地版本的变化与边界见[v1.3.0 说明](docs/RELEASE-v1.3.0.md)。[v1.1.0 使用与升级说明](docs/RELEASE-v1.1.0.md)及 R3/R4/R5 文档保留为历史记录。
 
 ### 旋转校正
 
@@ -131,7 +139,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 
 ## 设备兼容性与尚未完成的功能
 
-当前工作区的未发布候选接入了固定 OpenRazer 上游的 117 个鼠标/接收器 PID 能力配置，另保留 Dock 身份与键盘排除；产品版本已本地定版为 1.2.9，另接入 00E5–00E8 四项补充配置，公开包仍以已发布标签为准。能力按 DPI、回报率、电量、充电和接收器分别分级；只有当前 Windows HID 后端可明确映射、描述符检查通过且该能力实时读回成功时，才开放上游声明的写入。首次 DPI/回报率写入需会话确认，随后执行写前读取、写后读回和失败恢复。
+当前本地候选为 v1.3.0，保留 v1.2.9 的固定 OpenRazer 117 项及 00E5–00E8 四项补充配置，共 121 个能力配置、123 个身份项。DPI 与回报率在描述符检查、实例匹配及实时读取通过后可直接应用；写前读取、写后读回与失败恢复保持。设备页只保留离散 DPI 的实际输入限制。协议来源与新型号实机验证边界继续记录在版本和协议文档中，普通性能区域不显示来源提示。
 
 **OpenRazer 上游兼容不等于雷云 Lite 实机验证，也不承诺全系列全部设备可用。** 通用接收器不推断配对鼠标；缓存按实例隔离且不授予写入权限。Rotation 继续限于既有 00DE/00DF 描述符守卫。本轮 SE 有线和无线只读采样均为 DPI 800、500 Hz、旋转 −9°，没有实机参数写入。各型号协议、范围、离散值和降级原因见[能力矩阵](docs/OPENRAZER-CAPABILITY-MATRIX.md)，生成与运行边界见[兼容说明](docs/OPENRAZER-COMPATIBILITY.md)。
 
@@ -144,7 +152,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 
 ## 从源码构建
 
-在当前源码根目录打开 PowerShell；当前本地源码为 v1.2.9（未提交），公开基线标签为 [v1.2.8](https://github.com/a010200/LeiyunLite/tree/v1.2.8)。项目入口为 `LeiyunLite.Desktop.csproj`；解决方案保留兼容文件名 `LeiyunLite.R3.sln`，但构建的是当前目录源码，并非固定 R3。
+在当前源码根目录打开 PowerShell；当前本地源码为 v1.3.0（未提交、未发布），公开基线标签为 [v1.2.9](https://github.com/a010200/LeiyunLite/tree/v1.2.9)。项目入口为 `LeiyunLite.Desktop.csproj`；解决方案保留兼容文件名 `LeiyunLite.R3.sln`，但构建的是当前目录源码，并非固定 R3。
 
 ### 方式一：使用现有 .NET Framework 编译器
 
@@ -154,7 +162,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 
 脚本使用 Windows 上已有的64位 .NET Framework 编译器和 WPF 程序集，并从 `Tools/LiteIconBuilder.cs` 生成图标，不需要下载第三方 NuGet 包。要求相应编译器和程序集实际存在；运行环境仍需 .NET Framework 4.8。
 
-产物：`bin\Desktop1.2.9\LeiyunLite.Desktop.exe`。
+产物：`bin\Desktop1.3.0\LeiyunLite.Desktop.exe`。
 
 ### 方式二：MSBuild / VS Code 开发构建
 
@@ -164,7 +172,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-VSCode.ps1
 ```
 
-产物：`bin\VSCode1.2.9\LeiyunLite.Desktop.exe`。在 VS Code 打开仓库内的 **`LeiyunLite.code-workspace`**，可按 **Ctrl + Shift + B** 执行 `v1.2.9: Build`。
+产物：`bin\VSCode1.3.0\LeiyunLite.Desktop.exe`。在 VS Code 打开仓库内的 **`LeiyunLite.code-workspace`**，可按 **Ctrl + Shift + B** 执行 `v1.3.0: Build`。
 
 > 公开工作区不含维护者的本机路径或编辑器缓存。编辑器代码分析与编译是两回事；环境设置及常见问题见 [构建与开发](docs/BUILDING.md)。F5 断点调试尚未配置。
 
@@ -176,7 +184,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1 -Tes
 
 测试会显示独立窗口；部分回归测试向自己的测试文本框发送输入并使用临时注册表键，运行时请避免抢焦点。不加 `-Hardware` 不进行实机读取；硬件测试为可选只读检查，不代表实机写入已通过验证。
 
-当前本地版本的修复与验证边界见[v1.2.9 说明](docs/RELEASE-v1.2.9.md)；各版本记录见[更新记录](CHANGELOG.md)。测试结果不代表所有设备、游戏或输入环境均已通过实机验收。
+当前本地版本的修复与验证边界见[v1.3.0 说明](docs/RELEASE-v1.3.0.md)；各版本记录见[更新记录](CHANGELOG.md)。测试结果不代表所有设备、游戏或输入环境均已通过实机验收。
 
 ## 源码结构
 
@@ -196,7 +204,7 @@ docs/          各阶段使用说明与验证记录
 screenshots/   界面配图
 ```
 
-历史说明只代表对应版本；当前源码状态以本页和 `CHANGELOG.md` 为准，v1.2.9 本地状态见 `docs/RELEASE-v1.2.9.md`；公开版仍为 v1.2.8，公开 v1.2.7 记录保持不变。旧 WinForms UI 与旧构建入口已移除；当前软件仅构建 `LeiyunLite.Desktop.csproj`，使用 `Desktop/` 中的 WPF 界面。
+历史说明只代表对应版本；当前源码状态以本页和 `CHANGELOG.md` 为准，v1.3.0 本地状态见 `docs/RELEASE-v1.3.0.md`；公开稳定版为 v1.2.9，公开 v1.2.7 记录保持不变。旧 WinForms UI 与旧构建入口已移除；当前软件仅构建 `LeiyunLite.Desktop.csproj`，使用 `Desktop/` 中的 WPF 界面。
 
 这个独立仓库从 **v1.2.1 的代码快照**开始记录，不导入旧仓库的提交历史。此前版本已另行留档，迁移不改变当时的程序包、更新地址或设备支持范围。前期界面评审保留在 [UI-REDESIGN-FINAL.md](UI-REDESIGN-FINAL.md)和[UI-VISUAL-RECALL-REVIEW.md](UI-VISUAL-RECALL-REVIEW.md)，历史配图来源见 [screenshots/README.md](screenshots/README.md)。
 

@@ -46,6 +46,10 @@ namespace RazerBatteryTray
         internal bool AcceptsDescriptor(HidDescriptor d)
         {
             if (d == null || !d.IsRazer || d.ProductId != ProductId || (d.ReportLength != 90 && d.ReportLength != 91)) return false;
+            if (Transport != TransportKind.HidFeature90Or91) return false;
+            if (System.Text.RegularExpressions.Regex.Matches(d.Path??"",@"(?:^|[&#])mi_([0-9a-f]{2})(?=[&#]|$)",System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count>1) return false;
+            if (RazerControlPathResolver.HasAuditedDesktopConsumerCandidates(ProductId))
+                return d.CanProbe || d.UsagePage==1 || d.UsagePage==0x0C;
             if (DescriptorPolicy == DescriptorPolicy.NagaV3WindowsControl)
                 return d.ReportLength==91 && d.UsagePage==1 && (d.Usage==1 || d.Usage==2 || d.Usage==3);
             if (DescriptorPolicy == DescriptorPolicy.Default && RequiredInterfaceNumber < 0) return d.CanProbe;

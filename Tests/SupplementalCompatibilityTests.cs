@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Windows;
 using System.Windows.Controls;
 using RazerBatteryTray.Desktop;
 
@@ -51,6 +52,9 @@ namespace RazerBatteryTray.Tests
                     if(field==5) bad.Descriptor.Path="hid#vid_1532&mi_03&mi_03#control";
                     if(field>=3 && pid>=0xe7) continue;
                     var client=SupplementalClient(bad); var rejected=client.QueryRazerDeviceInfo();
+                    if(pid<0xe7 && field>=2 && field<=4) {
+                        Check(rejected.IsWriteSupported && bad.Writes==0,"Audited V4 native collection requires live GET, no absolute MI/Usage restriction"); continue;
+                    }
                     Check(!rejected.IsWriteSupported && bad.Sends==0 && !client.SetDpiTransactional(pid,1001,rejected.DeviceKey).WriteAttempted,"Invalid descriptor no command");
                 }
             }
@@ -156,22 +160,20 @@ namespace RazerBatteryTray.Tests
         }
         private static void SupplementalUi()
         {
-            var window=Preview(); var page=Field<DevicePage>(window,"devicePage"); var demo=typeof(ShellWindow).GetField("Demo",BindingFlags.Instance|BindingFlags.NonPublic);
-            try {
-                foreach(int pid in new[]{0xe5,0xe6,0xe7,0xe8}) {
-                    var f=new SupplementalFake(pid,91); var r=SupplementalClient(f).QueryRazerDeviceInfo(); window.Reading=r; page.UpdateReading(); Pump();
-                    var cap=DeviceCapabilities.For(r); Check(cap.AcceptsDpi(50000) && cap.AcceptsDpi(1001) && !cap.AcceptsDpi(50001),"UI exact DPI range");
+            foreach(int pid in new[]{0xe5,0xe6,0xe7,0xe8}) {
+                var f=new SupplementalFake(pid,91);var client=SupplementalClient(f);var window=DirectFixture(client);var page=Field<DevicePage>(window,"devicePage");
+                try {
+                    var r=window.Reading;var cap=DeviceCapabilities.For(r);
+                    Check(cap.AcceptsDpi(50000) && cap.AcceptsDpi(1001) && !cap.AcceptsDpi(50001),"UI exact DPI range");
                     Check(Descendants<Button>(Field<WrapPanel>(page,"ratePanel")).Select(b=>b.Content as string).SequenceEqual(cap.Rates.Select(h=>h+" Hz")),"UI exact rates");
-                    Check(Field<TextBlock>(page,"performanceInfo").Text.Contains("公开协议证据") && !Field<Button>(page,"applyRotation").IsEnabled,"UI upstream only/no Rotation");
-                    demo.SetValue(window,false);
-                    var task=Confirm(page,PerformanceCapability.Dpi,r); Click(window,"取消"); Check(!task.Result,"New PID cancel");
-                    task=Confirm(page,PerformanceCapability.Dpi,r); window.CloseDrawer(); Pump(); Check(!task.Result,"New PID close");
-                    task=Confirm(page,PerformanceCapability.Dpi,r); window.OpenDrawer("replacement",new TextBlock()); Pump(); Check(!task.Result,"New PID replaced"); window.CloseDrawer();
-                    task=Confirm(page,PerformanceCapability.Dpi,r); r.InterfacePath+="changed"; Click(window,"继续"); Check(!task.Result,"Path after prompt rejected"); r.InterfacePath=f.Descriptor.Path;
-                    task=Confirm(page,PerformanceCapability.Dpi,r); r.IsDpiWriteSupported=false; Click(window,"继续"); Check(!task.Result,"Live permission revoked after prompt");
-                    Check(f.Writes==0,"UI zero SET"); demo.SetValue(window,true);
-                }
-            } finally { demo.SetValue(window,true); window.ClosePreview(); }
+                    Check(Field<TextBlock>(page,"performanceInfo").Text=="" && Field<TextBlock>(page,"performanceInfo").Visibility==Visibility.Collapsed && !Field<Button>(page,"applyRotation").IsEnabled,"No ordinary protocol prose/no Rotation");
+                    PrepareDpi(page,r,1001);AwaitDirect(Commit(page,"CommitDpi"),window);Check(window.Reading.Dpi==1001,"Supplemental DPI direct exact input");
+                    AwaitDirect(Commit(page,"CommitRate",1000),window);Check(window.Reading.PollingRate==1000,"Supplemental polling direct readback");
+                    int writes=f.Writes;PrepareDpi(page,window.Reading,1600);SetField(page,"dpiEditPath","stale");AwaitDirect(Commit(page,"CommitDpi"),window);Check(f.Writes==writes,"Stale supplemental edit path zero SET");
+                    window.Reading.InterfacePath="changed";PrepareDpi(page,window.Reading,1600);AwaitDirect(Commit(page,"CommitDpi"),window);Check(f.Writes==writes,"Backend-bound supplemental path zero SET");
+                    window.Reading.IsDpiWriteSupported=window.Reading.IsPollingWriteSupported=false;PrepareDpi(page,window.Reading,1600);AwaitDirect(Commit(page,"CommitDpi"),window);AwaitDirect(Commit(page,"CommitRate",500),window);Check(f.Writes==writes,"Revoked supplemental permissions zero SET");
+                } finally {CloseDirectFixture(window);}
+            }
         }
         private sealed class SupplementalTransport:IHidTransport
         { private readonly SupplementalFake device; internal SupplementalTransport(SupplementalFake f){device=f;} public void Visit(Func<IHidDevice,bool> visitor){visitor(device);} }

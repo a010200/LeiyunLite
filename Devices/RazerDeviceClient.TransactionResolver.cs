@@ -10,16 +10,15 @@ namespace RazerBatteryTray
         private string selectedPerformanceTarget;
         private static string TargetSignature(HidDescriptor d)
         {
-            return d==null?null:d.VendorId+"|"+d.ProductId+"|"+d.InstanceKey+"|"+(d.Path??"").ToLowerInvariant()+"|"+
-                d.Version+"|"+d.ReportLength+"|"+d.UsagePage+"|"+d.Usage;
+            return RazerControlPathResolver.Signature(d);
         }
         private DeviceCapabilityProfile SelectedPerformanceProfile
-        { get { return selected!=null && selectedPerformanceTarget==TargetSignature(selected)?selectedPerformance:null; } }
+        { get { return selected!=null && controlPaths.IsLocked(selected) && selectedPerformanceTarget==TargetSignature(selected)?selectedPerformance:null; } }
         private void ClearPerformanceSession() { selectedPerformance=null; selectedPerformanceTarget=null; }
         private void RetireStalePerformanceSession(PerformanceWriteResult result)
         {
-            if(!result.WriteAttempted && result.Error=="device-changed" && selectedPerformance!=null &&
-                selectedPerformance.TransactionProbePolicy==TransactionProbePolicy.ReadOnlySessionFallback) {
+            if(!result.WriteAttempted && result.Error=="device-changed") {
+                controlPaths.Clear();
                 ClearPerformanceSession(); selectedDpiReady=selectedPollingReady=selectedStagesReady=false;
             }
         }
@@ -50,7 +49,7 @@ namespace RazerBatteryTray
             if(effective.TransactionProbePolicy==TransactionProbePolicy.None) return true;
             if(descriptor.ProductId!=0x007A && descriptor.ProductId!=0x007B) return false;
             string signature=TargetSignature(descriptor);
-            if(selectedPerformanceTarget==signature && selectedPerformance!=null) { effective=selectedPerformance; return true; }
+            if(controlPaths.IsLocked(descriptor) && selectedPerformanceTarget==signature && selectedPerformance!=null) { effective=selectedPerformance; return true; }
             ReadProbeOutcome outcome=ProbeReadTransaction(device,effective);
             if(signature!=TargetSignature(Describe(device))) return false;
             if(outcome==ReadProbeOutcome.Success) return true;

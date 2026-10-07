@@ -11,7 +11,7 @@ try {
     if(Test-Path (Join-Path $ArtifactsDirectory 'tests.log')) {throw 'Use a fresh evidence directory'}
     New-Item -ItemType Directory -Force $OutputDirectory,$ArtifactsDirectory | Out-Null
     $exe=Join-Path $OutputDirectory 'OpenRazerCompatibilityTests.exe'
-    & $compiler @options /target:exe /main:RazerBatteryTray.Tests.OpenRazerCompatibilityTests "/out:$exe" @sources 'Tests\OpenRazerCompatibilityTests.cs' 'Tests\OpenRazerCompatibilityUiTests.cs' 'Tests\SupplementalCompatibilityTests.cs' 'Tests\ReviewedCapabilityCorrectionTests.cs'
+    & $compiler @options /target:exe /main:RazerBatteryTray.Tests.OpenRazerCompatibilityTests "/out:$exe" @sources 'Tests\OpenRazerCompatibilityTests.cs' 'Tests\OpenRazerCompatibilityUiTests.cs' 'Tests\SupplementalCompatibilityTests.cs' 'Tests\ReviewedCapabilityCorrectionTests.cs' 'Tests\DirectPerformanceUiTests.cs' 'Tests\RazerControlPathResolverTests.cs'
     if($LASTEXITCODE-ne 0){throw 'OpenRazer tests compile failed'}
     $testArgs=@(); if($ReadOnly){$testArgs+='--read-only'}
     & $exe @testArgs | Tee-Object (Join-Path $ArtifactsDirectory 'tests.log')
