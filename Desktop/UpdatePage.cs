@@ -49,7 +49,7 @@ namespace RazerBatteryTray.Desktop
             try {
                 status.Text = session.Status; notes.Text = session.Offer == null ? "" : Ui.T("更新内容", "What's new") + "\n\n" + ReleaseNotesFormatter.Format(session.Offer.Notes);
                 progress.Value = session.Progress; progress.IsIndeterminate = session.Busy && session.Progress == 0;
-                progress.Visibility = session.Busy || session.Progress > 0 ? Visibility.Visible : Visibility.Collapsed;
+                progress.Visibility = session.Busy || session.Progress > 0 ? Visibility.Visible : Visibility.Hidden;
                 check.IsEnabled = !session.Busy; download.IsEnabled = !session.Busy && session.Offer != null;
                 check.Visibility = session.Job != null ? Visibility.Collapsed : Visibility.Visible;
                 download.Content = Ui.T("下载新版", "Download new version");

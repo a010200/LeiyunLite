@@ -34,12 +34,23 @@ namespace RazerBatteryTray.Desktop
             fades.RemoveAll(w => !w.Target.IsAlive || ReferenceEquals(w.Target.Target, element));
             var target = new FadeTarget { Target = new WeakReference(element), Final = final, Completed = completed }; fades.Add(target);
             if (Ui.Motion) {
+                // Hold the visible start until WPF's first render tick. Using the
+                // final base value here flashes a closing surface off, then on.
+                element.Opacity = from;
                 var animation = new DoubleAnimation(from, final, TimeSpan.FromMilliseconds(duration)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }, FillBehavior = FillBehavior.Stop };
                 animation.Completed += (s, e) => Complete(target);
                 element.BeginAnimation(UIElement.OpacityProperty, animation, HandoffBehavior.SnapshotAndReplace);
             } else Complete(target);
         }
-        private static void Complete(FadeTarget target) { var action = target.Completed; target.Completed = null; if (action != null) action(); }
+        private static void Complete(FadeTarget target)
+        {
+            // A removed clock may already have queued Completed on the dispatcher.
+            // Only the currently owned fade can finish a close or remove visuals.
+            if (!fades.Remove(target)) return;
+            var element = target.Target.Target as FrameworkElement;
+            if (element != null) { element.BeginAnimation(UIElement.OpacityProperty, null); element.Opacity = target.Final; }
+            var action = target.Completed; target.Completed = null; if (action != null) action();
+        }
         internal static void FadeOut(FrameworkElement element, Action completed) { Fade(element, element.Opacity, Fast, 0, completed); }
         internal static void ColorTo(SolidColorBrush brush, Color from, Color final)
         {

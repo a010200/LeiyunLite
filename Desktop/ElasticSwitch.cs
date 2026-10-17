@@ -11,7 +11,14 @@ namespace RazerBatteryTray.Desktop
 {
     internal sealed class ElasticCheckBox : CheckBox
     {
-        public ElasticCheckBox() { SetResourceReference(StyleProperty, typeof(CheckBox)); IsVisibleChanged += (s, e) => ElasticSwitch.Initialize(this); }
+        public ElasticCheckBox()
+        {
+            SetResourceReference(StyleProperty, typeof(CheckBox));
+            IsVisibleChanged += (s, e) => ElasticSwitch.Initialize(this);
+            IsEnabledChanged += (s, e) => {
+                if (!IsEnabled) { UiMotion.Stop(this); ElasticSwitch.Initialize(this); }
+            };
+        }
         public override void OnApplyTemplate() { base.OnApplyTemplate(); ElasticSwitch.Initialize(this); }
     }
     // One template and one animation policy for every CheckBox, including binding editors.
@@ -30,6 +37,7 @@ namespace RazerBatteryTray.Desktop
             EventManager.RegisterClassHandler(typeof(CheckBox), UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler((s, e) => Press((CheckBox)s, true)), true);
             EventManager.RegisterClassHandler(typeof(CheckBox), UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler((s, e) => Press((CheckBox)s, false)), true);
             EventManager.RegisterClassHandler(typeof(CheckBox), UIElement.LostMouseCaptureEvent, new MouseEventHandler((s, e) => Press((CheckBox)s, false)), true);
+            EventManager.RegisterClassHandler(typeof(CheckBox), Keyboard.LostKeyboardFocusEvent, new KeyboardFocusChangedEventHandler((s, e) => Press((CheckBox)s, false)), true);
             EventManager.RegisterClassHandler(typeof(CheckBox), UIElement.PreviewKeyDownEvent, new KeyEventHandler((s, e) => { if (e.Key == Key.Space) Press((CheckBox)s, true); }), true);
             EventManager.RegisterClassHandler(typeof(CheckBox), UIElement.PreviewKeyUpEvent, new KeyEventHandler((s, e) => { if (e.Key == Key.Space) Press((CheckBox)s, false); }), true);
             SystemParameters.StaticPropertyChanged += (s, e) => { if (Application.Current != null) Application.Current.Dispatcher.BeginInvoke(new Action(RefreshAll)); };
@@ -51,7 +59,7 @@ namespace RazerBatteryTray.Desktop
         }
         private static void Press(CheckBox c, bool down)
         {
-            var scale = Part<ScaleTransform>(c, "DotScale"); if (scale == null || !c.IsEnabled) return;
+            var scale = Part<ScaleTransform>(c, "DotScale"); if (scale == null || down && !c.IsEnabled) return;
             double to = down && Ui.Motion ? 1.10 : 1;
             UiMotion.SpringTo(c, scale, ScaleTransform.ScaleXProperty, to, SpringPreset.Snappy, rest: 1);
             UiMotion.SpringTo(c, scale, ScaleTransform.ScaleYProperty, to, SpringPreset.Snappy, rest: 1);

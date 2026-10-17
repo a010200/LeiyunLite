@@ -10,6 +10,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using System.Windows.Threading;
 using RazerBatteryTray.Macros;
@@ -55,6 +56,11 @@ namespace RazerBatteryTray.Desktop
         private Border activeDrawer;
         private Grid activeDrawerHost;
         private Button drawerCollapseButton;
+        // Exit owns pixels only: the live drawer is already unloaded and logically closed.
+        private readonly Grid drawerExitLayer = new Grid { IsHitTestVisible = false, Focusable = false, ClipToBounds = true, Visibility = Visibility.Collapsed };
+        private int drawerExitGeneration;
+        private readonly DispatcherTimer drawerExitDeadline = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(160) };
+        private EventHandler drawerExitTimeout;
         internal bool StartHidden { get; private set; }
         internal bool DrawerOpen { get { return overlay.Visibility == Visibility.Visible; } }
         internal event Action Refreshed;
@@ -104,6 +110,9 @@ namespace RazerBatteryTray.Desktop
             Closing += OnClosing;
             SizeChanged += (s, e) => ApplyLayout();
             Closed += (s, e) => DisposeServices();
+            IsVisibleChanged += (s, e) => { if (!IsVisible) CancelDrawerExit(); };
+            Deactivated += (s, e) => CancelDrawerExit();
+            StateChanged += (s, e) => { if (WindowState == WindowState.Minimized) CancelDrawerExit(); };
             CommandBindings.Add(new CommandBinding(ApplicationCommands.Save,
                 (s, e) => { if (macroPage != null) macroPage.SaveDraft(); e.Handled = true; },
                 (s, e) => { e.CanExecute = currentPage == 1 && macroPage != null && !macroPage.IsBindingsTab && !macroPage.IsRecording; e.Handled = true; }));
@@ -172,6 +181,7 @@ namespace RazerBatteryTray.Desktop
                 { CloseDrawer(); e.Handled = true; }
             };
             Grid.SetRowSpan(overlay, 2); content.Children.Add(overlay);
+            Grid.SetRowSpan(drawerExitLayer, 2); content.Children.Add(drawerExitLayer);
             Content = root;
             RebuildPages(0);
             ApplyLayout();
@@ -234,6 +244,7 @@ namespace RazerBatteryTray.Desktop
         }
         internal void OpenDrawer(string title, UIElement content, Func<LayoutMode, double> preferredWidth = null)
         {
+            CancelDrawerExit();
             if (!DrawerOpen) previousFocus = Keyboard.FocusedElement as FrameworkElement;
             drawerPreferredWidth = preferredWidth;
             if (activeDrawer != null) Ui.Stop(activeDrawer);
@@ -334,6 +345,8 @@ namespace RazerBatteryTray.Desktop
         }
         internal void CloseDrawer()
         {
+            if (!DrawerOpen) return;
+            var snapshot = CaptureDrawerExit();
             if (activeDrawer != null) Ui.Stop(activeDrawer);
             if (drawerCollapseButton != null) Ui.Stop(drawerCollapseButton);
             if (activeDrawerHost != null) Ui.Stop(activeDrawerHost);
@@ -341,6 +354,48 @@ namespace RazerBatteryTray.Desktop
             activeDrawer = null; activeDrawerHost = null; drawerCollapseButton = null; drawerPreferredWidth = null;
             if (macroPage != null) macroPage.DrawerClosed();
             var focus = previousFocus; previousFocus = null; if (focus != null) focus.Focus();
+            if (snapshot != null) {
+                int generation = ++drawerExitGeneration;
+                drawerExitLayer.Children.Add(snapshot); drawerExitLayer.Visibility = Visibility.Visible;
+                // One fade keeps the mask, content and handle in exactly the same frame.
+                UiMotion.Fade(drawerExitLayer, 1, 140, 0, () => { if (generation == drawerExitGeneration) CancelDrawerExit(); });
+                // Completed waits for a render tick. A one-shot deadline also clears
+                // pixels if WPF throttles rendering; never delay logical close.
+                if (generation == drawerExitGeneration) {
+                    drawerExitTimeout = (s, e) => { if (generation == drawerExitGeneration) CancelDrawerExit(); };
+                    drawerExitDeadline.Tick += drawerExitTimeout; drawerExitDeadline.Start();
+                }
+            }
+        }
+        private Image CaptureDrawerExit()
+        {
+            CancelDrawerExit();
+            if (!Ui.Motion || !IsVisible || WindowState == WindowState.Minimized || activeDrawerHost == null || !activeDrawerHost.IsLoaded) return null;
+            var host = overlay;
+            double width = host.ActualWidth, height = host.ActualHeight;
+            var source = PresentationSource.FromVisual(host);
+            if (source == null || source.CompositionTarget == null || width <= 0 || height <= 0) return null;
+            var dpi = source.CompositionTarget.TransformToDevice;
+            double pixelWidth = Math.Ceiling(width * dpi.M11), pixelHeight = Math.Ceiling(height * dpi.M22);
+            // Oversized/offscreen previews fall back to the existing immediate close.
+            if (pixelWidth <= 0 || pixelHeight <= 0 || pixelWidth > 4096 || pixelHeight > 4096 || pixelWidth * pixelHeight > 4000000) return null;
+            try {
+                var bitmap = new RenderTargetBitmap((int)pixelWidth, (int)pixelHeight, 96 * dpi.M11, 96 * dpi.M22, PixelFormats.Pbgra32);
+                // The overlay has no layout offset. Capturing the aligned drawer
+                // alone would include its parent offset and clip its pixels.
+                bitmap.Render(host); bitmap.Freeze();
+                return new Image { Source = bitmap, Width = width, Height = height, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Focusable = false };
+            } catch (InvalidOperationException) { return null; }
+              catch (ArgumentException) { return null; }
+        }
+        private void CancelDrawerExit()
+        {
+            drawerExitGeneration++;
+            drawerExitDeadline.Stop();
+            if (drawerExitTimeout != null) { drawerExitDeadline.Tick -= drawerExitTimeout; drawerExitTimeout = null; }
+            Ui.Stop(drawerExitLayer);
+            foreach (FrameworkElement child in drawerExitLayer.Children) Ui.Stop(child);
+            drawerExitLayer.Children.Clear(); drawerExitLayer.Background = null; drawerExitLayer.Visibility = Visibility.Collapsed;
         }
         internal void Notice(string message) { toast.Show(message); }
         internal Task RefreshDevice()
@@ -407,6 +462,7 @@ namespace RazerBatteryTray.Desktop
         internal void ClosePreview() { if (!Demo) throw new InvalidOperationException(); discardApproved = true; exiting = true; Close(); }
         private void DisposeServices()
         {
+            CancelDrawerExit();
             if (Updates != null) Updates.Dispose();
             if (updatePage != null) updatePage.Dispose();
             if (macroPage != null) macroPage.DisposeRecording();

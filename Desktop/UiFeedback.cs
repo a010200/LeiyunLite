@@ -24,19 +24,42 @@ namespace RazerBatteryTray.Desktop
             icon.GotKeyboardFocus += (s, e) => session.Wait();
             icon.MouseLeave += (s, e) => { if (!icon.IsKeyboardFocusWithin) session.Close(); };
             icon.LostKeyboardFocus += (s, e) => { if (!icon.IsMouseOver) session.Close(); };
-            icon.Unloaded += (s, e) => session.CloseImmediately();
+            icon.Loaded += (s, e) => session.AttachOwner();
+            icon.Unloaded += (s, e) => session.DetachOwner();
+            icon.IsEnabledChanged += (s, e) => { if (!icon.IsEnabled) session.CloseImmediately(); };
+            icon.IsVisibleChanged += (s, e) => { if (!icon.IsVisible) session.CloseImmediately(); };
             return icon;
         }
         internal sealed class TipSession
         {
             private readonly FrameworkElement anchor;
             private readonly ToolTip tooltip;
+            private Window owner;
             private readonly DispatcherTimer timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
             internal TipSession(FrameworkElement anchor, ToolTip tooltip) { this.anchor = anchor; this.tooltip = tooltip; timer.Tick += (s, e) => { timer.Stop(); if (anchor.IsMouseOver || anchor.IsKeyboardFocusWithin) Open(); }; }
             internal void Wait() { timer.Stop(); if (tooltip.IsOpen) Open(); else timer.Start(); }
-            internal void Open() { timer.Stop(); UiMotion.Stop(tooltip); tooltip.IsOpen = true; UiMotion.Fade(tooltip); }
+            internal void Open() { timer.Stop(); if (!anchor.IsVisible || !anchor.IsEnabled) return; AttachOwner(); UiMotion.Stop(tooltip); tooltip.IsOpen = true; UiMotion.Fade(tooltip); }
             internal void Close() { timer.Stop(); if (tooltip.IsOpen) UiMotion.FadeOut(tooltip, CloseImmediately); }
             internal void CloseImmediately() { timer.Stop(); tooltip.IsOpen = false; UiMotion.Stop(tooltip); }
+            internal void AttachOwner()
+            {
+                var window = Window.GetWindow(anchor); if (ReferenceEquals(owner, window)) return;
+                DetachOwner(); owner = window;
+                if (owner == null) return;
+                owner.Deactivated += OwnerDeactivated; owner.IsVisibleChanged += OwnerVisibilityChanged;
+                owner.StateChanged += OwnerStateChanged; owner.Closed += OwnerClosed;
+            }
+            internal void DetachOwner()
+            {
+                CloseImmediately();
+                if (owner == null) return;
+                owner.Deactivated -= OwnerDeactivated; owner.IsVisibleChanged -= OwnerVisibilityChanged;
+                owner.StateChanged -= OwnerStateChanged; owner.Closed -= OwnerClosed; owner = null;
+            }
+            private void OwnerDeactivated(object sender, EventArgs e) { CloseImmediately(); }
+            private void OwnerVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e) { if (owner != null && !owner.IsVisible) CloseImmediately(); }
+            private void OwnerStateChanged(object sender, EventArgs e) { if (owner != null && owner.WindowState == WindowState.Minimized) CloseImmediately(); }
+            private void OwnerClosed(object sender, EventArgs e) { DetachOwner(); }
         }
     }
     internal sealed class UiSnackbar : Border
@@ -48,13 +71,18 @@ namespace RazerBatteryTray.Desktop
             Background = Ui.Brush("CardBackground"); BorderBrush = Ui.Brush("CardBorder"); BorderThickness = new Thickness(1);
             CornerRadius = new CornerRadius(8); Padding = new Thickness(16, 10, 16, 10); Margin = new Thickness(0, 8, 0, 12);
             text.Margin = new Thickness(0); Child = text; Visibility = Visibility.Collapsed;
-            timer.Tick += (s, e) => Clear(); Unloaded += (s, e) => timer.Stop();
+            timer.Tick += (s, e) => Dismiss(); Unloaded += (s, e) => Clear();
         }
         internal void Show(string message)
         {
-            timer.Stop(); text.Text = message ?? "";
+            timer.Stop(); UiMotion.Stop(this); text.Text = message ?? "";
             Visibility = string.IsNullOrEmpty(text.Text) ? Visibility.Collapsed : Visibility.Visible;
             if (Visibility == Visibility.Visible) { UiMotion.Enter(this); timer.Start(); }
+        }
+        private void Dismiss()
+        {
+            timer.Stop();
+            if (Visibility == Visibility.Visible) UiMotion.FadeOut(this, Clear);
         }
         internal void Clear() { timer.Stop(); UiMotion.Stop(this); text.Text = ""; Visibility = Visibility.Collapsed; }
     }

@@ -63,6 +63,9 @@ namespace RazerBatteryTray.Desktop
             b.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Space || e.Key == System.Windows.Input.Key.Enter) UiMotion.Press(b, true); };
             b.PreviewKeyUp += (s, e) => { if (e.Key == System.Windows.Input.Key.Space || e.Key == System.Windows.Input.Key.Enter) UiMotion.Press(b, false); };
             b.LostKeyboardFocus += (s, e) => UiMotion.Press(b, false);
+            // A disabled control may never receive the matching release event.
+            // Settle only its visual channels; Click and business timing stay native.
+            b.IsEnabledChanged += (s, e) => { if (!b.IsEnabled) UiMotion.Stop(b); };
             b.IsVisibleChanged += (s, e) => { if (!b.IsVisible) UiMotion.Stop(b); };
             if (primary) MagneticMotion.Attach(b, UiMotion.MotionTokens.PrimaryMagneticMax);
             return b;
