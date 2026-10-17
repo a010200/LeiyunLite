@@ -20,9 +20,66 @@ namespace RazerBatteryTray.Macros
         private long timingOrigin;
         private int timingSequence;
         private GlobalInputHook hooks;
-        private MacroLibrary library;
+        private volatile MacroLibrary library;
+        private volatile int mouseInterest;
+        private volatile bool bindingMouseOutput, previewMouseOutput, closing, updateHandoff;
+        internal bool MouseHookInstalled { get { return hooks != null && hooks.MouseHookInstalled; } }
+        internal bool KeyboardHookInstalled { get { return hooks != null && hooks.KeyboardHookInstalled; } }
+        private static bool MayUseMouse(MacroLibrary snapshot, string id, HashSet<string> visiting)
+        {
+            var macro = snapshot.Find(id);
+            if (macro == null || !visiting.Add(id)) return true;
+            foreach (var step in macro.Steps)
+                if (step.Kind == ActionKind.Mouse || step.Kind == ActionKind.CallMacro && MayUseMouse(snapshot, step.Value, visiting))
+                    return true;
+            visiting.Remove(id); return false;
+        }
+        private static void MousePolicy(MacroLibrary snapshot, out int interest, out bool output)
+        {
+            interest = 0; output = false;
+            if (!snapshot.BindingsEnabled) return;
+            foreach (var binding in snapshot.Bindings)
+            {
+                if (!binding.Enabled) continue;
+                if (binding.Trigger != TriggerKind.Keyboard) interest |= 1 << (int)binding.Trigger;
+                if (MayUseMouse(snapshot, binding.MacroId, new HashSet<string>())) output = true;
+            }
+        }
+        private bool BindingsAvailable { get { return !manuallyPaused && !recordingSession && !updateHandoff && !closing; } }
+        private int mousePrearms;
+        private sealed class MousePrearm : IDisposable
+        {
+            private MacroController owner;
+            internal MousePrearm(MacroController owner) { this.owner = owner; Interlocked.Increment(ref owner.mousePrearms); }
+            public void Dispose() { var current = Interlocked.Exchange(ref owner, null); if (current != null) { Interlocked.Decrement(ref current.mousePrearms); current.RefreshMouseHook(); } }
+        }
+        private IDisposable Prearm(MacroLibrary snapshot, bool force = false)
+        {
+            int interest; bool output; MousePolicy(snapshot, out interest, out output);
+            if (!force && interest == 0 && !output) return null;
+            var lease = new MousePrearm(this);
+            try { if (hooks != null && (force || interest != 0 || output)) hooks.RequireMouse(true, true); return lease; }
+            catch { lease.Dispose(); throw; }
+        }
+        private bool NeedsMouse()
+        { return !closing && (Volatile.Read(ref mousePrearms) != 0 || recordingSession || mouseInterest != 0 || bindingMouseOutput || previewMouseOutput); }
+        private void RefreshMousePolicy()
+        {
+            int interest; bool output; MousePolicy(library, out interest, out output);
+            mouseInterest = BindingsAvailable ? interest : 0;
+            bindingMouseOutput = BindingsAvailable && output;
+            RefreshMouseHook();
+        }
+        private void RefreshMouseHook()
+        {
+            if (hooks != null) hooks.RequireMouse(NeedsMouse());
+        }
+        private bool RouteMouse(TriggerKind trigger)
+        { return recordingSession || diagnosticsEnabled || (mouseInterest & (1 << (int)trigger)) != 0; }
+        private bool RetainMouse()
+        { return engine.IsRunning || windowsOutput != null && windowsOutput.MouseInputPending; }
         private volatile MacroRecorder recorder;
-        private bool manuallyPaused;
+        private volatile bool manuallyPaused;
         private volatile bool recordingSession;
         private volatile bool recordingStopRequested;
         private volatile bool recordingInArea;
@@ -50,7 +107,7 @@ namespace RazerBatteryTray.Macros
         public event Action<string> StatusChanged;
         public event Action<string> InputDiagnosticChanged;
         private int diagnosticSequence;
-        public MacroController(IMacroStore store, IMacroOutput output, bool installHooks, bool initiallySuspended = false, bool diagnosticsEnabled = false)
+        public MacroController(IMacroStore store, IMacroOutput output, bool installHooks, bool initiallySuspended = false, bool diagnosticsEnabled = false, Func<IntPtr> mouseInstaller = null)
         {
             this.store = store;
             this.diagnosticsEnabled = diagnosticsEnabled;
@@ -63,6 +120,8 @@ namespace RazerBatteryTray.Macros
             InputDiagnostic = "输入诊断：按住右键再按中键，可确认触发和模拟输入是否已到达 Windows。";
             engine.StatusChanged += message => {
                 Status = message;
+                if (!engine.IsRunning) previewMouseOutput = false;
+                RefreshMouseHook();
                 if (diagnosticsEnabled) {
                     if (message.StartsWith("执行中：", StringComparison.Ordinal)) RecordTiming("宏状态：运行");
                     else if (message.StartsWith("已停止：", StringComparison.Ordinal)) RecordTiming("宏状态：停止");
@@ -72,8 +131,11 @@ namespace RazerBatteryTray.Macros
             if (installHooks)
             {
                 hooks = new GlobalInputHook(RouteInput, SuppressWheel,
-                    windowsOutput == null ? null : new Func<UIntPtr, bool>(windowsOutput.ShouldSuppressStoppedDown));
-                try { hooks.Start(); } catch { hooks.Dispose(); engine.Dispose(); throw; }
+                    windowsOutput == null ? null : new Func<UIntPtr, bool>(windowsOutput.ShouldSuppressStoppedDown),
+                    RetainMouse, RouteMouse, windowsOutput == null ? null : new Action<UIntPtr>(windowsOutput.ObserveMouseInput), NeedsMouse,
+                    windowsOutput == null ? null : new Action<UIntPtr>(windowsOutput.ObserveKeyboardInput), mouseInstaller);
+                RefreshMousePolicy();
+                try { hooks.Start(recordingSession || mouseInterest != 0 || bindingMouseOutput); } catch { hooks.Dispose(); engine.Dispose(); throw; }
             }
         }
         public MacroLibrary Snapshot() { lock (configurationGate) return library.Clone(); }
@@ -259,31 +321,51 @@ namespace RazerBatteryTray.Macros
             MacroValidation.Validate(next);
             if (safety)
             {
-                router.ReplaceAndStop(next); library = next; SafetySavePending = true;
+                router.ReplaceAndStop(next); library = next; SafetySavePending = true; RefreshMousePolicy();
                 // A storage failure must not reactivate a revoked input in this session.
                 store.Save(next); SafetySavePending = false;
             }
             else
             {
-                store.Save(next); router.ReplaceAndStop(next); library = next; SafetySavePending = false;
+                using (BindingsAvailable ? Prearm(next) : null) {
+                    try { store.Save(next); }
+                    catch { RefreshMousePolicy(); throw; }
+                    router.ReplaceAndStop(next); library = next; SafetySavePending = false; RefreshMousePolicy();
+                }
             }
         }
         public void SuspendBindings(bool suspend)
         {
-            manuallyPaused = suspend; router.Suspended = suspend || recordingSession;
-            if (suspend) engine.Stop();
+            using (!suspend && !recordingSession && !updateHandoff ? Prearm(library) : null) {
+                manuallyPaused = suspend; router.Suspended = suspend || recordingSession || updateHandoff;
+                if (suspend) engine.Stop();
+                RefreshMousePolicy();
+            }
         }
         internal bool BeginUpdateHandoff()
         {
-            lock (configurationGate) { return !recordingSession && !SafetySavePending && router.TrySuspendIdle(); }
+            lock (configurationGate) {
+                if (recordingSession || SafetySavePending || !router.TrySuspendIdle()) return false;
+                updateHandoff = true; RefreshMousePolicy(); return true;
+            }
         }
-        internal void CancelUpdateHandoff() { router.Suspended = manuallyPaused || recordingSession; }
+        internal void CancelUpdateHandoff() {
+            using (!manuallyPaused && !recordingSession ? Prearm(library) : null) {
+                updateHandoff = false; router.Suspended = manuallyPaused || recordingSession; RefreshMousePolicy();
+            }
+        }
         // Tray pause affects future triggers only; Stop is a separate, explicit action.
-        public void PauseNewBindings(bool pause) { manuallyPaused = pause; router.Suspended = pause || recordingSession; }
+        public void PauseNewBindings(bool pause) {
+            using (!pause && !recordingSession && !updateHandoff ? Prearm(library) : null) {
+                manuallyPaused = pause; router.Suspended = pause || recordingSession || updateHandoff; RefreshMousePolicy();
+            }
+        }
         internal void PrepareRecording()
         {
             if (recordingSession) throw new InvalidOperationException("Recording already active.");
-            recordingStopRequested = false; recordingSession = true; router.Suspended = true; engine.Stop();
+            using (Prearm(library, true)) {
+                recordingStopRequested = false; recordingSession = true; router.Suspended = true; engine.Stop(); RefreshMousePolicy();
+            }
         }
         internal void StartRecording(RecordingDelay delay, int fixedDelay, int capacity, bool inArea = false)
         {
@@ -294,18 +376,26 @@ namespace RazerBatteryTray.Macros
         {
             var active = recorder; recorder = null;
             try { return active == null ? new System.Collections.Generic.List<MacroStep>() : active.Finish(); }
-            finally { if (active != null) active.Dispose(); recordingSession = false; recordingStopRequested = false; router.Suspended = manuallyPaused; }
+            finally { if (active != null) active.Dispose(); recordingSession = false; recordingStopRequested = false; router.Suspended = manuallyPaused || updateHandoff; RefreshMousePolicy(); }
         }
         public bool Preview(MacroLibrary edited, string macroId)
         {
             if (recordingSession) return false;
             MacroValidation.Validate(edited);
-            return engine.Start(edited.Clone(), macroId, "preview", false, 3000);
+            var snapshot = edited.Clone();
+            bool mouse = MayUseMouse(snapshot, macroId, new HashSet<string>());
+            using (mouse ? Prearm(snapshot, true) : null) {
+                bool previous = previewMouseOutput;
+                previewMouseOutput |= mouse;
+                bool started = engine.Start(snapshot, macroId, "preview", false, 3000);
+                if (!started) previewMouseOutput = previous;
+                RefreshMouseHook(); return started;
+            }
         }
         public void Stop() { if (recordingSession) recordingStopRequested = true; engine.Stop(); }
         public void Dispose()
         {
-            manuallyPaused = true;
+            closing = true; manuallyPaused = true;
             EndRecording();
             router.Suspended = true;
             // Leave hooks alive while SendInput releases keys; they run on their

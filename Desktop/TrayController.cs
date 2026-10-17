@@ -19,6 +19,7 @@ namespace RazerBatteryTray.Desktop
         private readonly ShellWindow shell;
         private readonly Forms.NotifyIcon icon;
         private Drawing.Icon image;
+        private BatteryTrayVisual? imageState;
         private TrayFlyout flyout;
         private Window notification;
         private readonly DispatcherTimer notificationTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -62,10 +63,17 @@ namespace RazerBatteryTray.Desktop
         {
             if (disposed) return;
             var r = shell.Reading;
-            var next = BrandIcon(r.IsConnected, Math.Max(16, Forms.SystemInformation.SmallIconSize.Width)); icon.Icon = next; if (image != null) image.Dispose(); image = next;
-            string label = string.IsNullOrWhiteSpace(r.DeviceName) ? "雷云lite" : r.DeviceName;
-            label += r.IsConnected && r.BatteryKnown && !r.IsSleeping ? " · " + r.BatteryPercent + "%" : r.IsConnected ? Ui.T(" · 未收到新电量", " · No fresh battery data") : Ui.T(" · 未连接", " · Disconnected");
-            icon.Text = label.Length > 63 ? label.Substring(0, 63) : label;
+            var state = BatteryTrayIconRenderer.State(r, shell.Preferences.LowBatteryThreshold,
+                Math.Max(16, Forms.SystemInformation.SmallIconSize.Width), DateTime.Now,
+                TimeSpan.FromMilliseconds(Math.Max(30000, shell.LegacySettings.RefreshInterval) * 2L + 5000));
+            if (!imageState.HasValue || !imageState.Value.Equals(state))
+            {
+                var next = BatteryTrayIconRenderer.Create(state);
+                try { icon.Icon = next; } catch { next.Dispose(); throw; }
+                var previous = image; image = next; imageState = state;
+                if (previous != null) previous.Dispose();
+            }
+            icon.Text = TrayMouseTooltipFormatter.Format(r, state);
             if (initialized && previousConnected != r.IsConnected && shell.Preferences.ConnectionNotifications)
                 Notify(r.IsConnected ? Ui.T("鼠标已连接", "Mouse connected") : Ui.T("鼠标已断开", "Mouse disconnected"));
             initialized = true; previousConnected = r.IsConnected;

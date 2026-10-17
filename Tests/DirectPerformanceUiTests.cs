@@ -70,7 +70,7 @@ namespace RazerBatteryTray.Tests
                 Check(window.Reading.Dpi==1600 && f.Writes==1,"Exact final DPI, one SET");
                 Check(f.Requests[0][7]==4 && f.Requests[0][8]==0x86,"Initial live stages GET");
                 int at=f.Requests.FindIndex(q=>q[8]<0x80);Check(at>0 && f.Requests[at][8]==6 && f.Requests[at+1][8]==0x86,"SET then readback");
-                Check(Toast(window).Contains("已写入并读回确认"),"Success feedback retained");
+                Check(!Toast(window).Contains("已写入并读回确认"),"Successful DPI is silent");
             } finally {CloseDirectFixture(window);}
         }
         private static void UiDirectPolling()
@@ -81,7 +81,7 @@ namespace RazerBatteryTray.Tests
                 var clock=System.Diagnostics.Stopwatch.StartNew();while(Field<bool>(page,"writing")) {Check(!window.DrawerOpen,"Button never opens Drawer");if(clock.ElapsedMilliseconds>10000)throw new Exception("Polling click timeout");Pump();System.Threading.Thread.Sleep(1);}
                 Pump();Check(f.Rate==1000 && f.Writes==1,"Polling writes once directly");
                 Check(f.Requests.Take(3).Select(q=>q[8]).SequenceEqual(new byte[]{0xC0,0x40,0xC0}),"Initial GET / SET / readback");
-                Check(!window.DrawerOpen && Toast(window).Contains("已写入并读回确认"),"No Drawer, success feedback");
+                Check(!window.DrawerOpen && !Toast(window).Contains("已写入并读回确认"),"No Drawer, successful polling is silent");
             } finally {CloseDirectFixture(window);}
         }
         private static void UiDirectGuards()

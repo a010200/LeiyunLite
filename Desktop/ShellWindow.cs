@@ -45,6 +45,10 @@ namespace RazerBatteryTray.Desktop
         private readonly DispatcherTimer refreshTimer = new DispatcherTimer();
         private int currentPage = -1;
         private bool refreshing, exiting, disposed, discardApproved, runtimeInitialized;
+        private Task deviceRefreshTask;
+        internal long DeviceRefreshStarted, DeviceRefreshApplied;
+        private long performanceEpoch;
+        internal void AdvancePerformanceEpoch() { System.Threading.Interlocked.Increment(ref performanceEpoch); }
         private FrameworkElement previousFocus;
         private Func<LayoutMode, double> drawerPreferredWidth;
         private const double DrawerHandleProtrusion = 14;
@@ -119,7 +123,7 @@ namespace RazerBatteryTray.Desktop
             if (Demo) { await RefreshDevice(); return; }
             if (!await CompleteTrial()) return;
             SetupTray();
-            monitor = new DpiMonitor(Device, reading => Dispatcher.BeginInvoke(new Action(() => OnDpi(reading))));
+            monitor = new DpiMonitor(Device, QueueDpiReading);
             monitor.Start(); refreshTimer.Start();
             Updates.Start();
             await RefreshDevice();
@@ -192,6 +196,7 @@ namespace RazerBatteryTray.Desktop
             bool bindingsTab = macroPage != null && macroPage.IsBindingsTab;
             int selectedStep = macroPage == null ? -1 : macroPage.SelectedStepIndex;
             if (updatePage != null) updatePage.Dispose();
+            if (devicePage != null) devicePage.DisposePerformance();
             if (macroPage != null) macroPage.DisposeRecording();
             ApplyLanguage(); pages.Children.Clear();
             devicePage = new DevicePage(this); macroPage = new MacroPage(this);
@@ -338,18 +343,31 @@ namespace RazerBatteryTray.Desktop
             var focus = previousFocus; previousFocus = null; if (focus != null) focus.Focus();
         }
         internal void Notice(string message) { toast.Show(message); }
-        internal async Task RefreshDevice()
+        internal Task RefreshDevice()
+        {
+            if (disposed) return Task.FromResult(0);
+            if (deviceRefreshTask == null || deviceRefreshTask.IsCompleted) deviceRefreshTask = RefreshDeviceCore();
+            return deviceRefreshTask;
+        }
+        private async Task RefreshDeviceCore()
         {
             if (refreshing || disposed) return; refreshing = true;
+            long sequence = ++DeviceRefreshStarted;
             try
             {
                 Reading = Demo ? new MouseBatteryInfo { ProductId = 0x00DF, DeviceKey = "demo", DeviceName = "Razer Viper V3 Pro SE", ProtocolStatus = DeviceProtocolStatus.Ready, IsWriteSupported = true, DpiKnown = true, PollingKnown = true, IsDpiWriteSupported = true, IsPollingWriteSupported = true, DpiTrust = CapabilityTrust.UpstreamVerified, PollingTrust = CapabilityTrust.UpstreamVerified, RotationTrust = CapabilityTrust.HardwareVerified, BatteryKnown = true, IsConnected = true, BatteryPercent = 98, Dpi = 800, DpiStage = 2, DpiStageCount = 5, DpiStages = new[] { 400, 800, 1600, 3200, 6400 }, PollingRate = 1000, RotationKnown = true, RotationAngle = -8, IsRotationWriteSupported = true, IsRotationHardwareVerified = true, LastUpdated = DateTime.Now } : await Task.Run(() => Device.QueryRazerDeviceInfo());
                 if (disposed) return;
+                DeviceRefreshApplied = sequence;
                 devicePage.UpdateReading(); UpdateTray();
                 if (Refreshed != null) Refreshed();
             }
             catch (Exception ex) { Notice(Ui.T("读取失败：", "Read failed: ") + ex.Message); }
             finally { refreshing = false; }
+        }
+        private void QueueDpiReading(DpiReading value)
+        {
+            long epoch = System.Threading.Interlocked.Read(ref performanceEpoch);
+            Dispatcher.BeginInvoke(new Action(() => { if (epoch == System.Threading.Interlocked.Read(ref performanceEpoch)) OnDpi(value); }));
         }
         private void OnDpi(DpiReading value)
         {
@@ -392,7 +410,7 @@ namespace RazerBatteryTray.Desktop
             if (Updates != null) Updates.Dispose();
             if (updatePage != null) updatePage.Dispose();
             if (macroPage != null) macroPage.DisposeRecording();
-            disposed = true; refreshTimer.Stop(); toast.Clear();
+            disposed = true; if (devicePage != null) devicePage.DisposePerformance(); refreshTimer.Stop(); toast.Clear();
             if (monitor != null) monitor.Dispose(); if (Macros != null) Macros.Dispose();
             if (tray != null) tray.Dispose();
         }

@@ -2,15 +2,15 @@
 
 面向部分雷蛇鼠标的 Windows 桌面工具：查看电量、调整 DPI 与回报率，编辑和录制本地宏，再把它们绑定到按键或滚轮。
 
-**当前公开稳定版：v1.3.0** · Windows x64 · C# / WPF · .NET Framework 4.8 · [MIT License](LICENSE)
+**当前公开稳定版：v1.3.1** · Windows x64 · C# / WPF · .NET Framework 4.8 · [MIT License](LICENSE)
 
-> [v1.3.0 版本说明](docs/RELEASE-v1.3.0.md) · [下载 v1.3.0](https://github.com/a010200/LeiyunLite/releases/tag/v1.3.0) · [安装与自动更新](docs/INSTALLING.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/a010200/LeiyunLite/issues)
+> [v1.3.1 版本说明](docs/RELEASE-v1.3.1.md) · [下载 v1.3.1](https://github.com/a010200/LeiyunLite/releases/tag/v1.3.1) · [安装与自动更新](docs/INSTALLING.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/a010200/LeiyunLite/issues)
 
 | 下载 | 适合谁 |
 |---|---|
-| [安装版 EXE](https://github.com/a010200/LeiyunLite/releases/download/v1.3.0/LeiyunLite-v1.3.0-Setup-x64.exe) | 希望有快捷方式、卸载入口和应用内安装更新 |
-| [便携版 ZIP](https://github.com/a010200/LeiyunLite/releases/download/v1.3.0/LeiyunLite-v1.3.0-win-x64.zip) | 不安装，完整解压后直接运行；升级时手动替换程序 |
-| [SHA256 校验文件](https://github.com/a010200/LeiyunLite/releases/download/v1.3.0/SHA256SUMS.txt) | 核对下载文件完整性 |
+| [安装版 EXE](https://github.com/a010200/LeiyunLite/releases/download/v1.3.1/LeiyunLite-v1.3.1-Setup-x64.exe) | 希望有快捷方式、卸载入口和应用内安装更新 |
+| [便携版 ZIP](https://github.com/a010200/LeiyunLite/releases/download/v1.3.1/LeiyunLite-v1.3.1-win-x64.zip) | 不安装，完整解压后直接运行；升级时手动替换程序 |
+| [SHA256 校验文件](https://github.com/a010200/LeiyunLite/releases/download/v1.3.1/SHA256SUMS.txt) | 核对下载文件完整性 |
 
 `update-x64.zip` 和 `update.json` 是供安装版自动更新使用的附件，不是便携包。GitHub 的 `Source code` 是源码，不是可以直接运行的软件。
 
@@ -53,7 +53,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 运行环境：**Windows 10/11 x64，.NET Framework 4.8**。本轮验证环境是 Windows 10 x64；Windows 11、多显示器和混合缩放仍需进一步实机验证。
 
 1. 从上方选择安装版或便携版。若旧版仍在运行，先保存宏草稿、停止录制/播放，再从托盘菜单选择“退出”。
-2. **安装版**：运行 `LeiyunLite-v1.3.0-Setup-x64.exe`，之后使用安装生成的快捷方式。**便携版**：完整解压 `LeiyunLite-v1.3.0-win-x64.zip` 到新目录，再运行 `LeiyunLite.Desktop.exe`。两种版本不要同时运行。安装目录的 `LeiyunLite.exe` 是新的固定启动入口，不是上游旧软件。
+2. **安装版**：运行 `LeiyunLite-v1.3.1-Setup-x64.exe`，之后使用安装生成的快捷方式。**便携版**：完整解压 `LeiyunLite-v1.3.1-win-x64.zip` 到新目录，再运行 `LeiyunLite.Desktop.exe`。两种版本不要同时运行。安装目录的 `LeiyunLite.exe` 是新的固定启动入口，不是上游旧软件。
 3. 在“设备”页查看状态。型号未明确识别时，不会开放未经确认的 DPI/回报率写入。
 4. v1.1.0 及更早便携版不会自动变成安装版，需要手动运行一次安装程序；个人宏和设置沿用原位置。便携版更换路径后，如需自启动，请在设置中重新启用“开机自启动”。
 
@@ -68,6 +68,15 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 ```
 
 安全预览使用模拟设备，不读写鼠标、不监听键鼠录制、不执行宏输入或命令、不保存设置。**它只能看界面，不能用于测试真实录制或硬件控制。**
+
+### v1.3.1
+
+- 调整 DPI 和回报率时立即显示目标值，成功后保持显示。
+- 托盘用鼠标轮廓显示电量液位，充电时显示插头，悬停可查看百分比。
+- 鼠标监听按绑定和录制需求启用，保留键盘热键。
+- 修正停止宏后迟到模拟按下的原生标记兼容。
+
+验证与边界见[v1.3.1 说明](docs/RELEASE-v1.3.1.md)。已正式发布。
 
 ### v1.3.0
 
@@ -115,7 +124,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 - 管理员窗口、系统安全桌面、游戏原始输入与反作弊环境不保证兼容，不提供绕过机制。
 - 宏可包含启动程序、网址或运行命令的动作。使用他人提供的宏前，先检查其内容。
 
-当前本地版本的变化与边界见[v1.3.0 说明](docs/RELEASE-v1.3.0.md)。[v1.1.0 使用与升级说明](docs/RELEASE-v1.1.0.md)及 R3/R4/R5 文档保留为历史记录。
+当前本地候选的变化与边界见[v1.3.1 说明](docs/RELEASE-v1.3.1.md)。[v1.1.0 使用与升级说明](docs/RELEASE-v1.1.0.md)及 R3/R4/R5 文档保留为历史记录。
 
 ### 旋转校正
 
@@ -139,9 +148,9 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 
 ## 设备兼容性与尚未完成的功能
 
-当前本地候选为 v1.3.0，保留 v1.2.9 的固定 OpenRazer 117 项及 00E5–00E8 四项补充配置，共 121 个能力配置、123 个身份项。DPI 与回报率在描述符检查、实例匹配及实时读取通过后可直接应用；写前读取、写后读回与失败恢复保持。设备页只保留离散 DPI 的实际输入限制。协议来源与新型号实机验证边界继续记录在版本和协议文档中，普通性能区域不显示来源提示。
+当前本地候选为 v1.3.1，保留 v1.2.9 的固定 OpenRazer 117 项及 00E5–00E8 四项补充配置，共 121 个能力配置、123 个身份项。DPI 与回报率在描述符检查、实例匹配及实时读取通过后可直接应用；写前读取、写后读回与失败恢复保持。设备页只保留离散 DPI 的实际输入限制。协议来源与新型号实机验证边界继续记录在版本和协议文档中，普通性能区域不显示来源提示。
 
-**OpenRazer 上游兼容不等于雷云 Lite 实机验证，也不承诺全系列全部设备可用。** 通用接收器不推断配对鼠标；缓存按实例隔离且不授予写入权限。Rotation 继续限于既有 00DE/00DF 描述符守卫。本轮 SE 有线和无线只读采样均为 DPI 800、500 Hz、旋转 −9°，没有实机参数写入。各型号协议、范围、离散值和降级原因见[能力矩阵](docs/OPENRAZER-CAPABILITY-MATRIX.md)，生成与运行边界见[兼容说明](docs/OPENRAZER-COMPATIBILITY.md)。
+**OpenRazer 上游兼容不等于雷云 Lite 实机验证，也不承诺全系列全部设备可用。** 通用接收器不推断配对鼠标；缓存按实例隔离且不授予写入权限。Rotation 继续限于既有 00DE/00DF 描述符守卫。历史 SE 采样和验证范围见公开 v1.3.0 报告；本轮仅执行 Fake / Demo 交互与绘图回归，没有真实设备采样或参数写入。各型号协议、范围、离散值和降级原因见[能力矩阵](docs/OPENRAZER-CAPABILITY-MATRIX.md)，生成与运行边界见[兼容说明](docs/OPENRAZER-COMPATIBILITY.md)。
 
 目前不提供：
 
@@ -152,7 +161,7 @@ DPI 与回报率显示最近成功读取的缓存值，未知时显示“—”�
 
 ## 从源码构建
 
-在当前源码根目录打开 PowerShell；当前本地源码为 v1.3.0（未提交、未发布），公开基线标签为 [v1.2.9](https://github.com/a010200/LeiyunLite/tree/v1.2.9)。项目入口为 `LeiyunLite.Desktop.csproj`；解决方案保留兼容文件名 `LeiyunLite.R3.sln`，但构建的是当前目录源码，并非固定 R3。
+在当前源码根目录打开 PowerShell；当前本地源码为 v1.3.1（未提交、未发布），公开基线标签为 [v1.3.0](https://github.com/a010200/LeiyunLite/tree/v1.3.0)。项目入口为 `LeiyunLite.Desktop.csproj`；解决方案保留兼容文件名 `LeiyunLite.R3.sln`，但构建的是当前目录源码，并非固定 R3。
 
 ### 方式一：使用现有 .NET Framework 编译器
 
@@ -162,7 +171,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 
 脚本使用 Windows 上已有的64位 .NET Framework 编译器和 WPF 程序集，并从 `Tools/LiteIconBuilder.cs` 生成图标，不需要下载第三方 NuGet 包。要求相应编译器和程序集实际存在；运行环境仍需 .NET Framework 4.8。
 
-产物：`bin\Desktop1.3.0\LeiyunLite.Desktop.exe`。
+产物：`bin\Desktop1.3.1\LeiyunLite.Desktop.exe`。
 
 ### 方式二：MSBuild / VS Code 开发构建
 
@@ -172,7 +181,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-VSCode.ps1
 ```
 
-产物：`bin\VSCode1.3.0\LeiyunLite.Desktop.exe`。在 VS Code 打开仓库内的 **`LeiyunLite.code-workspace`**，可按 **Ctrl + Shift + B** 执行 `v1.3.0: Build`。
+产物：`bin\VSCode1.3.1\LeiyunLite.Desktop.exe`。在 VS Code 打开仓库内的 **`LeiyunLite.code-workspace`**，可按 **Ctrl + Shift + B** 执行 `v1.3.0: Build`。
 
 > 公开工作区不含维护者的本机路径或编辑器缓存。编辑器代码分析与编译是两回事；环境设置及常见问题见 [构建与开发](docs/BUILDING.md)。F5 断点调试尚未配置。
 

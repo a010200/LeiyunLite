@@ -104,7 +104,7 @@ namespace RazerBatteryTray.Macros
         {
             lock (gate)
             {
-                if (disposed || cancellation != null) return false;
+                if (disposed || cancellation != null || windowsOutput != null && windowsOutput.InputPending) return false;
                 var macro = library.Find(macroId);
                 if (macro == null || macro.Steps.Count == 0) { Report("宏没有动作，无法执行。"); return false; }
                 // library is an immutable snapshot supplied by MacroController.

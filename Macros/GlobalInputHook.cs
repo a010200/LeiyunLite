@@ -14,9 +14,8 @@ namespace RazerBatteryTray.Macros
         [StructLayout(LayoutKind.Sequential)] private struct KeyboardData { public uint Key, Scan, Flags, Time; public UIntPtr Extra; }
         [StructLayout(LayoutKind.Sequential)] private struct MouseData { public int X, Y; public uint Data, Flags, Time; public UIntPtr Extra; }
         [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SetWindowsHookEx(int id, HookProc proc, IntPtr module, uint thread);
-        [DllImport("user32.dll")] private static extern bool UnhookWindowsHookEx(IntPtr hook);
+        [DllImport("user32.dll", SetLastError = true)] private static extern bool UnhookWindowsHookEx(IntPtr hook);
         [DllImport("user32.dll")] private static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr message, IntPtr data);
-        [DllImport("user32.dll")] private static extern bool PostThreadMessage(uint thread, uint message, IntPtr wParam, IntPtr lParam);
         [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)] private static extern IntPtr GetModuleHandle(string name);
         private readonly Func<InputStroke, bool> handle;
@@ -33,18 +32,73 @@ namespace RazerBatteryTray.Macros
         private int wheelRemainder;
         private KeyModifiers wheelModifiers;
         private long passedLeftDowns, passedLeftUps, blockedStoppedDowns, lastPassedLeftDown, lastPassedLeftUp;
-        private bool disposed;
+        private volatile bool disposed, mouseDesired;
+        private int readyClosed;
+        private void CloseReady() { if (Interlocked.Exchange(ref readyClosed, 1) == 0) ready.Dispose(); }
+        private Control queue;
+        private readonly Func<bool> retainMouse, needsMouse;
+        private readonly Func<TriggerKind, bool> routeMouse;
+        private readonly Action<UIntPtr> observeMouse, observeKeyboard;
+        private readonly Func<IntPtr> mouseInstaller;
+        private readonly HashSet<TriggerKind> routedButtons = new HashSet<TriggerKind>();
+        internal bool MouseHookInstalled { get { return Interlocked.CompareExchange(ref mouse, IntPtr.Zero, IntPtr.Zero) != IntPtr.Zero; } }
+        internal bool KeyboardHookInstalled { get { return Interlocked.CompareExchange(ref keyboard, IntPtr.Zero, IntPtr.Zero) != IntPtr.Zero; } }
+        internal Exception MouseHookError { get; private set; }
+        internal int MouseInstallCount { get; private set; }
+        internal int MouseUninstallCount { get; private set; }
+        internal bool ThreadAlive { get { return thread != null && thread.IsAlive; } }
+        // Requests never wait in a hook callback. Only configuration/preview callers
+        // may wait for prearming, before publishing a runnable mouse macro.
+        internal void RequireMouse(bool required, bool ensure = false)
+        {
+            if (disposed) { if (ensure) throw new ObjectDisposedException("GlobalInputHook"); return; }
+            if (ensure && GetCurrentThreadId() == threadId)
+                throw new InvalidOperationException("不能在输入回调中同步切换鼠标监听。");
+            mouseDesired = required;
+            var control = queue;
+            if (control == null) { if (ensure) throw new InvalidOperationException("输入线程未就绪。"); return; }
+            if (!ensure) { try { control.BeginInvoke(new Action(ReconcileMouse)); } catch (InvalidOperationException) { } return; }
+            // BeginInvoke + EndInvoke propagates native errors; no callback invokes it.
+            var pending = control.BeginInvoke(new Action(ReconcileMouse));
+            if (!pending.AsyncWaitHandle.WaitOne(2000)) throw new InvalidOperationException("鼠标监听初始化超时。");
+            control.EndInvoke(pending); pending.AsyncWaitHandle.Close();
+            if (required && !MouseHookInstalled)
+                throw new InvalidOperationException("无法启用鼠标宏监听，请重试。", MouseHookError);
+        }
+        private void ReconcileMouse()
+        {
+            if (disposed) {
+                if (mouseButtons.Count == 0 && routedButtons.Count == 0 && (retainMouse == null || !retainMouse())) Application.ExitThread();
+                return;
+            }
+            if (needsMouse != null) mouseDesired = needsMouse();
+            if (mouseDesired && mouse == IntPtr.Zero)
+            {
+                mouse = mouseInstaller == null ? SetWindowsHookEx(14, mouseProc, GetModuleHandle(null), 0) : mouseInstaller();
+                MouseHookError = mouse == IntPtr.Zero ? new Win32Exception(Marshal.GetLastWin32Error()) : null;
+                if (mouse != IntPtr.Zero) MouseInstallCount++;
+            }
+            else if (!mouseDesired && mouse != IntPtr.Zero && mouseButtons.Count == 0 &&
+                routedButtons.Count == 0 && (retainMouse == null || !retainMouse()))
+            {
+                if (!UnhookWindowsHookEx(mouse)) { MouseHookError = new Win32Exception(Marshal.GetLastWin32Error()); return; }
+                mouse = IntPtr.Zero; MouseUninstallCount++; wheelRemainder = 0;
+            }
+        }
         internal long PassedLeftDowns { get { return Interlocked.Read(ref passedLeftDowns); } }
         internal long PassedLeftUps { get { return Interlocked.Read(ref passedLeftUps); } }
         internal long BlockedStoppedDowns { get { return Interlocked.Read(ref blockedStoppedDowns); } }
         internal long LastPassedLeftDown { get { return Interlocked.Read(ref lastPassedLeftDown); } }
         internal long LastPassedLeftUp { get { return Interlocked.Read(ref lastPassedLeftUp); } }
         public GlobalInputHook(Func<InputStroke, bool> handle, Func<InputStroke, bool> suppressWheel = null,
-            Func<UIntPtr, bool> suppressStoppedDown = null)
-        { this.handle = handle; this.suppressWheel = suppressWheel; this.suppressStoppedDown = suppressStoppedDown; }
-        public void Start()
+            Func<UIntPtr, bool> suppressStoppedDown = null, Func<bool> retainMouse = null,
+            Func<TriggerKind, bool> routeMouse = null, Action<UIntPtr> observeMouse = null, Func<bool> needsMouse = null, Action<UIntPtr> observeKeyboard = null, Func<IntPtr> mouseInstaller = null)
+        { this.handle = handle; this.suppressWheel = suppressWheel; this.suppressStoppedDown = suppressStoppedDown;
+            this.mouseInstaller = mouseInstaller; this.observeKeyboard = observeKeyboard; this.needsMouse = needsMouse; this.retainMouse = retainMouse; this.routeMouse = routeMouse; this.observeMouse = observeMouse; }
+        public void Start(bool mouseRequired = true)
         {
             if (thread != null) return;
+            mouseDesired = mouseRequired;
             thread = new Thread(Run) { IsBackground = true, Name = "LeiyunLite.InputHooks" };
             thread.SetApartmentState(ApartmentState.STA); thread.Start();
             if (!ready.WaitOne(5000)) throw new InvalidOperationException("输入监听初始化超时。");
@@ -57,14 +111,19 @@ namespace RazerBatteryTray.Macros
                 threadId = GetCurrentThreadId();
                 keyboardProc = Keyboard; mouseProc = Mouse;
                 keyboard = SetWindowsHookEx(13, keyboardProc, GetModuleHandle(null), 0);
-                mouse = SetWindowsHookEx(14, mouseProc, GetModuleHandle(null), 0);
-                if (keyboard == IntPtr.Zero || mouse == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+                if (keyboard == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
                 // Creating a native control ensures this thread owns a message queue.
-                using (var queue = new Control())
+                using (var control = new Control())
+                using (var reconcile = new System.Windows.Forms.Timer { Interval = 25 })
                 {
-                    IntPtr hwnd = queue.Handle;
+                    IntPtr hwnd = control.Handle; queue = control;
+                    ReconcileMouse();
+                    if (needsMouse != null) mouseDesired = needsMouse();
+            if (mouseDesired && mouse == IntPtr.Zero) throw MouseHookError;
+                    reconcile.Tick += (sender, args) => ReconcileMouse(); reconcile.Start();
                     ready.Set();
                     Application.Run();
+                    reconcile.Stop(); queue = null;
                 }
             }
             catch (Exception ex) { error = ex; ready.Set(); }
@@ -72,6 +131,8 @@ namespace RazerBatteryTray.Macros
             {
                 if (keyboard != IntPtr.Zero) UnhookWindowsHookEx(keyboard);
                 if (mouse != IntPtr.Zero) UnhookWindowsHookEx(mouse);
+                keyboard = mouse = IntPtr.Zero; queue = null;
+                if (disposed) CloseReady();
             }
         }
         private KeyModifiers Modifiers
@@ -94,6 +155,7 @@ namespace RazerBatteryTray.Macros
                 {
                     var info = (KeyboardData)Marshal.PtrToStructure(data, typeof(KeyboardData));
                     int msg = message.ToInt32();
+                    if ((info.Flags & 0x10) != 0 && WindowsMacroOutput.IsOwnInputTag(info.Extra) && observeKeyboard != null) observeKeyboard(info.Extra);
                     // Drop only stale presses. Releases must still reach the target.
                     if ((info.Flags & 0x10) != 0 && (msg == 0x100 || msg == 0x104) &&
                         suppressStoppedDown != null && suppressStoppedDown(info.Extra)) return new IntPtr(1);
@@ -119,6 +181,7 @@ namespace RazerBatteryTray.Macros
                     var info = (MouseData)Marshal.PtrToStructure(data, typeof(MouseData));
                     // This runs before a queued injected event reaches the target.
                     bool ownInjected = (info.Flags & 1) != 0 && WindowsMacroOutput.IsOwnInputTag(info.Extra);
+                    if (ownInjected && observeMouse != null) observeMouse(info.Extra);
                     if (ownInjected && (msg == 0x201 || msg == 0x204 || msg == 0x207 || msg == 0x20B) &&
                         suppressStoppedDown != null && suppressStoppedDown(info.Extra))
                     {
@@ -145,6 +208,8 @@ namespace RazerBatteryTray.Macros
                             case 0x207: case 0x208: kind = TriggerKind.Middle; down = msg == 0x207; break;
                             case 0x20B: case 0x20C: kind = (info.Data >> 16) == 1 ? TriggerKind.X1 : TriggerKind.X2; down = msg == 0x20B; break;
                             case 0x20A:
+                                if (routeMouse != null && !routeMouse(TriggerKind.WheelUp) && !routeMouse(TriggerKind.WheelDown))
+                                    return CallNextHookEx(IntPtr.Zero, code, message, data);
                                 int delta = unchecked((short)(info.Data >> 16));
                                 if (wheelModifiers != Modifiers) { wheelRemainder = 0; wheelModifiers = Modifiers; }
                                 wheelRemainder += delta;
@@ -160,6 +225,10 @@ namespace RazerBatteryTray.Macros
                             default: return CallNextHookEx(IntPtr.Zero, code, message, data);
                         }
                         if (down) mouseButtons.Add(kind); else mouseButtons.Remove(kind);
+                        bool interested = routeMouse == null || routeMouse(kind);
+                        bool paired = routedButtons.Contains(kind);
+                        if (down && interested) routedButtons.Add(kind); else if (!down) routedButtons.Remove(kind);
+                        if (!interested && !paired) return CallNextHookEx(IntPtr.Zero, code, message, data);
                         if (handle(new InputStroke { Trigger = kind, Down = down, Modifiers = Modifiers,
                             RightButtonDown = mouseButtons.Contains(TriggerKind.Right) })) return new IntPtr(1);
                     }
@@ -171,8 +240,8 @@ namespace RazerBatteryTray.Macros
         public void Dispose()
         {
             if (disposed) return; disposed = true;
-            if (thread != null && thread.IsAlive) { PostThreadMessage(threadId, 0x12, IntPtr.Zero, IntPtr.Zero); thread.Join(1500); }
-            if (thread == null || !thread.IsAlive) ready.Dispose();
+            if (thread != null && thread.IsAlive) { var control = queue; if (control != null) { try { control.BeginInvoke(new Action(ReconcileMouse)); } catch (InvalidOperationException) { } } if (GetCurrentThreadId() != threadId) thread.Join(1500); }
+            if (thread == null || !thread.IsAlive) CloseReady();
         }
     }
 }

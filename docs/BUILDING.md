@@ -19,7 +19,7 @@ cd LeiyunLite
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-VSCode.ps1 -Configuration Release
 ```
 
-程序位于 `bin\VSCode1.2.8\LeiyunLite.Desktop.exe`。省略 `-Configuration Release` 时为 Debug 开发构建。图标及嵌入图片已随源码提供，不依赖开发者缓存。解决方案保留 `LeiyunLite.R3.sln` 旧文件名以兼容既有编辑器设置，其构建内容是当前 v1.2.8 源码。
+程序位于 `bin\VSCode1.3.1\LeiyunLite.Desktop.exe`。省略 `-Configuration Release` 时为 Debug 开发构建。图标及嵌入图片已随源码提供，不依赖开发者缓存。解决方案保留 `LeiyunLite.R3.sln` 旧文件名以兼容既有编辑器设置，其构建内容是当前本地 v1.3.1 候选源码。
 
 ## 无 Visual Studio 的脚本构建
 
@@ -29,7 +29,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-VSCode.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-desktop.ps1
 ```
 
-程序位于 `bin\Desktop1.2.8\LeiyunLite.Desktop.exe`。脚本还会从 `Tools/LiteIconBuilder.cs` 重新生成图标。无需第三方 NuGet 包。
+程序位于 `bin\Desktop1.3.1\LeiyunLite.Desktop.exe`。脚本还会从 `Tools/LiteIconBuilder.cs` 重新生成图标。无需第三方 NuGet 包。
 
 ## VS Code
 

@@ -18,6 +18,7 @@ namespace RazerBatteryTray.Tests
         {
             artifacts = directory;
             RunCore(test);
+            HookLifecycleTests.Run(test, directory);
             test("Native input hooks and SendInput Unicode to an isolated test window", NativeInput);
             test("Native callback decoding: modifiers, key-up, mouse buttons, fractional wheel and injected flags", HookDecoding);
         }
@@ -25,6 +26,7 @@ namespace RazerBatteryTray.Tests
         {
             artifacts = directory;
             RunCore(test);
+            HookLifecycleTests.Run(test, directory);
         }
         private static void RunCore(Action<string, Action> test)
         {
@@ -158,8 +160,10 @@ namespace RazerBatteryTray.Tests
             output.BeginRun(); UIntPtr oldTag = output.CurrentInputTag;
             Check(WindowsMacroOutput.IsOwnInputTag(oldTag) && !output.ShouldSuppressStoppedDown(oldTag), "Active run was blocked");
             output.CancelRun();
+            Check(output.ShouldSuppressStoppedDown(new UIntPtr((uint)oldTag.ToUInt64())), "Truncated native run was not blocked");
             Check(output.ShouldSuppressStoppedDown(oldTag), "Canceled run was not blocked");
             output.BeginRun(); UIntPtr newTag = output.CurrentInputTag;
+            Check(!output.ShouldSuppressStoppedDown(new UIntPtr((uint)newTag.ToUInt64())) && output.ShouldSuppressStoppedDown(new UIntPtr((uint)oldTag.ToUInt64())), "Truncated old/new run isolation");
             Check(newTag != oldTag && !output.ShouldSuppressStoppedDown(newTag) &&
                 output.ShouldSuppressStoppedDown(oldTag), "A new run revived stale input or remained blocked");
             int physical = 0;
@@ -414,6 +418,217 @@ namespace RazerBatteryTray.Tests
             public bool IsRunning { get; private set; } public string ActiveBinding { get; private set; } public bool Repeat; public int Starts;
             public bool Start(MacroLibrary lib, string macro, string binding, bool repeat, int delay) { if (IsRunning) return false; Starts++; Repeat = repeat; IsRunning = true; ActiveBinding = binding; return true; }
             public void Stop() { IsRunning = false; ActiveBinding = null; }
+        }
+    }
+}
+
+namespace RazerBatteryTray.Tests
+{
+    internal static class HookLifecycleTests
+    {
+        private static string directory;
+        internal static void Run(Action<string, Action> test, string path)
+        {
+            directory = path;
+            test("Native hook idle has keyboard only; 100 mouse transitions leave no duplicate handles", IdleAndTransitions);
+            test("Native mouse release fence survives disable and callback requests do not wait", ReleaseFence);
+            test("Mouse callback routes relevant input only and reports bounded timing samples", CallbackOverhead);
+            test("Native output drain retains hook after demand ends and releases after acknowledgement", OutputDrain);
+            test("Real SendInput releases and canceled down are acknowledged before native unhook; dispose rejects new requests", NativeOutputAcknowledgement);
+            test("Native tag slot wrap and pending old-input start rejection preserve stop isolation", NativeTagWrap);
+            test("Failed mouse installation leaves ordinary keyboard idle usable and rejects binding/record/preview", FailedMouseInstallation);
+            test("Controller binding, pause, handoff, countdown and storage-failure native mouse lifecycle", ControllerPolicy);
+            test("Keyboard reachable nested mouse and Preview prearm before first output; pause preserves running macro", MouseOutputPolicy);
+        }
+        private static void Check(bool ok, string why) { if (!ok) throw new Exception(why); }
+        private static void Until(Func<bool> check)
+        { var w=Stopwatch.StartNew(); while(!check() && w.ElapsedMilliseconds<4000) { Application.DoEvents(); Thread.Sleep(5); } Check(check(),"Native lifecycle timed out"); }
+        private static T Field<T>(object instance,string name)
+        { return (T)instance.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic).GetValue(instance); }
+        private static object Call(object instance,string name,params object[] args)
+        { return instance.GetType().GetMethod(name,BindingFlags.Instance|BindingFlags.NonPublic).Invoke(instance,args); }
+        private static void OnOwner(GlobalInputHook hook, Action action)
+        { Field<Control>(hook,"queue").Invoke(action); }
+        [StructLayout(LayoutKind.Sequential)] private struct MousePacket { public int X,Y; public uint Data,Flags,Time; public UIntPtr Extra; }
+        private static IntPtr Mouse(GlobalInputHook hook,int message)
+        {
+            IntPtr ptr=Marshal.AllocHGlobal(Marshal.SizeOf(typeof(MousePacket)));
+            try { Marshal.StructureToPtr(new MousePacket(),ptr,false); return (IntPtr)Call(hook,"Mouse",0,new IntPtr(message),ptr); }
+            finally { Marshal.FreeHGlobal(ptr); }
+        }
+        private static void IdleAndTransitions()
+        {
+            int routed=0;
+            using(var hook=new GlobalInputHook(s=>{Interlocked.Increment(ref routed);return false;}))
+            {
+                hook.Start(false); Check(!hook.MouseHookInstalled && hook.KeyboardHookInstalled,"Idle native mouse hook exists");
+                int handles=Process.GetCurrentProcess().HandleCount;
+                for(int i=0;i<100;i++) {
+                    hook.RequireMouse(true,true); hook.RequireMouse(true,true);
+                    Check(hook.MouseHookInstalled,"Native install failed");
+                    hook.RequireMouse(false); Until(()=>!hook.MouseHookInstalled);
+                }
+                Check(hook.MouseInstallCount==100 && hook.MouseUninstallCount==100,"Duplicate hook transition");
+                Check(hook.KeyboardHookInstalled && routed==0,"Mouse transitions altered keyboard or routed test input");
+                Check(Process.GetCurrentProcess().HandleCount<=handles+8,"Transition handle growth");
+            }
+        }
+        private static void ReleaseFence()
+        {
+            GlobalInputHook active=null; int events=0;
+            using(var hook=new GlobalInputHook(s=> {events++; if(s.Down) active.RequireMouse(false); return true;}))
+            {
+                active=hook; hook.Start(false); hook.RequireMouse(true,true);
+                OnOwner(hook,()=>Check(Mouse(hook,0x204)==new IntPtr(1),"Down not suppressed"));
+                Thread.Sleep(60); Check(hook.MouseHookInstalled,"Unhooked before paired release");
+                OnOwner(hook,()=>Check(Mouse(hook,0x205)==new IntPtr(1),"Paired release lost"));
+                Until(()=>!hook.MouseHookInstalled); Check(events==2,"Duplicate routed input");
+            }
+        }
+        private static void CallbackOverhead()
+        {
+            int routes=0;
+            using(var hook=new GlobalInputHook(s=>{routes++;return false;},routeMouse:k=>k==TriggerKind.Middle)) {
+                hook.Start(false); hook.RequireMouse(true,true);
+                var samples=new long[10000];
+                OnOwner(hook,()=> {
+                    for(int i=0;i<200;i++){Mouse(hook,0x204);Mouse(hook,0x205);}
+                    for(int i=0;i<samples.Length;i++){long t=Stopwatch.GetTimestamp();Mouse(hook,(i&1)==0?0x204:0x205);samples[i]=Stopwatch.GetTimestamp()-t;}
+                    Mouse(hook,0x207);Mouse(hook,0x208);
+                });
+                Check(routes==2,"Unrelated right click reached controller"); Array.Sort(samples);
+                string text="Unmapped physical-shaped right callback (reflection/marshalling included), n=10000; p50="+(samples[5000]*1000000.0/Stopwatch.Frequency).ToString("0.00")+"us; p95="+(samples[9500]*1000000.0/Stopwatch.Frequency).ToString("0.00")+"us; p99="+(samples[9900]*1000000.0/Stopwatch.Frequency).ToString("0.00")+"us. Not game/frame-time measurement.";
+                File.WriteAllText(Path.Combine(directory,"hook-callback-overhead.txt"),text);Console.WriteLine(text);
+            }
+        }
+        private static void OutputDrain()
+        {
+            bool pending=true;
+            using(var hook=new GlobalInputHook(s=>false,retainMouse:()=>pending)) {
+                hook.Start(false);hook.RequireMouse(true,true);hook.RequireMouse(false);Thread.Sleep(60);
+                Check(hook.MouseHookInstalled,"Undrained output protection lost");pending=false;Until(()=>!hook.MouseHookInstalled);
+            }
+        }
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
+        private static void NativeOutputAcknowledgement()
+        {
+            var output=new WindowsMacroOutput();output.BeginRun();
+            ulong observedTag=0;bool suppressed=false;
+            var hook=new GlobalInputHook(s=>false,suppressStoppedDown:tag=>{observedTag=tag.ToUInt64();suppressed=output.ShouldSuppressStoppedDown(tag);return suppressed;},retainMouse:()=>output.MouseInputPending,observeMouse:output.ObserveMouseInput,observeKeyboard:output.ObserveKeyboardInput);
+            using(var target=new Form {Text="LeiyunLite isolated mouse release test",Size=new Size(420,180),TopMost=true}) {
+                Point original=Cursor.Position;
+                try {
+                    target.Show();target.Activate();SetForegroundWindow(target.Handle);
+                    var wait=Stopwatch.StartNew();
+                    while(GetForegroundWindow()!=target.Handle && wait.ElapsedMilliseconds<20000){Application.DoEvents();Thread.Sleep(25);}
+                    Check(GetForegroundWindow()==target.Handle,"Isolated mouse target is not foreground; no input sent");
+                    Cursor.Position=target.PointToScreen(new Point(100,80));Application.DoEvents();
+                    Check(GetForegroundWindow()==target.Handle,"Target lost foreground; no input sent");
+                    hook.Start(false);hook.RequireMouse(true,true);
+                    // Releases have no corresponding press at the target. The one
+                    // canceled DOWN below must be intercepted, never delivered.
+                    output.Key(135,true);output.Key(135,false);
+                    for(int i=0;i<100;i++)output.MouseButton(MouseAction.Left,false);
+                    output.CancelRun();output.MouseButton(MouseAction.Left,true);output.MouseButton(MouseAction.Left,false);
+                    Until(()=>!output.MouseInputPending && hook.BlockedStoppedDowns>=1 && hook.PassedLeftUps>=101);
+                    Check(hook.BlockedStoppedDowns==1 && hook.PassedLeftUps==101,"Native late DOWN or final UP barrier failed: blocked="+hook.BlockedStoppedDowns+" ups="+hook.PassedLeftUps);
+                    File.WriteAllText(Path.Combine(directory,"native-output-drain.txt"),"104 accepted mouse/keyboard packets; late DOWN blocked="+hook.BlockedStoppedDowns+"; UP passed="+hook.PassedLeftUps+"; pending="+output.MouseInputPending);
+                    hook.RequireMouse(false);Until(()=>!hook.MouseHookInstalled);
+                    Check(output.TotalInputsSent==104,"Native packet count");
+                } finally {
+                    File.WriteAllText(Path.Combine(directory,"native-output-observation.txt"),"sent="+output.TotalInputsSent+" pending="+output.MouseInputPending+" passedDown="+hook.PassedLeftDowns+" passedUp="+hook.PassedLeftUps+" blocked="+hook.BlockedStoppedDowns+" observedTag="+observedTag.ToString("X")+" suppressed="+suppressed+" expectedTag="+output.CurrentInputTag.ToUInt64().ToString("X")+" expectedSuppress="+output.ShouldSuppressStoppedDown(output.CurrentInputTag));
+                    hook.Dispose();Cursor.Position=original;target.Close();
+                }
+            }
+            Check(!hook.ThreadAlive && !hook.KeyboardHookInstalled && !hook.MouseHookInstalled,"Hook/thread survived ordinary disposal");
+            bool rejected=false;try{hook.RequireMouse(true,true);}catch(ObjectDisposedException){rejected=true;}Check(rejected,"Disposed hook accepted a new dangerous operation");
+        }
+        private static void NativeTagWrap()
+        {
+            var output=new WindowsMacroOutput();
+            for(int i=0;i<65533;i++)output.BeginRun();output.CancelRun();UIntPtr old=output.CurrentInputTag;
+            Check(output.ShouldSuppressStoppedDown(new UIntPtr((uint)old.ToUInt64())),"Before-wrap cancellation");
+            output.BeginRun();UIntPtr last=output.CurrentInputTag;Check(!output.ShouldSuppressStoppedDown(new UIntPtr((uint)last.ToUInt64())),"Last slot blocked");
+            output.CancelRun();output.BeginRun();UIntPtr first=output.CurrentInputTag;
+            Check(!output.ShouldSuppressStoppedDown(new UIntPtr((uint)first.ToUInt64())) && output.ShouldSuppressStoppedDown(new UIntPtr((uint)last.ToUInt64())),"Native wrapped slot revived old pending input");
+            var field=typeof(WindowsMacroOutput).GetField("inputsSubmitted",BindingFlags.Instance|BindingFlags.NonPublic);field.SetValue(output,1L);
+            bool rejected=false;try{output.BeginRun();}catch(InvalidOperationException){rejected=true;}Check(rejected,"New generation allowed with pending native input");
+            using(var engine=new MacroEngine(output))Check(!engine.Start(Library(false),"main","test",false,0),"Engine ran before old native input drained");
+            output.ObserveKeyboardInput(WindowsMacroOutput.InputTag);Check(output.InputPending,"Foreign/legacy input drained the current run");
+            output.ObserveKeyboardInput(output.CurrentInputTag);output.BeginRun();Check(!output.InputPending,"Keyboard acknowledgement cannot drain gate");
+        }
+        private static void FailedMouseInstallation()
+        {
+            int attempts=0;var store=new Store();var output=new Output();
+            using(var c=new MacroController(store,output,true,mouseInstaller:()=>{Interlocked.Increment(ref attempts);return IntPtr.Zero;})) {
+                output.Controller=c;Check(c.KeyboardHookInstalled && !c.MouseHookInstalled && attempts==0,"Idle depends on mouse installation");
+                c.Save(Library(false));Check(attempts==0,"Pure keyboard-free draft installed mouse hook");
+                bool rejected=false;try{c.ApplyBinding(new MacroBinding {MacroId="main",Trigger=TriggerKind.Right},false);}catch(InvalidOperationException){rejected=true;}
+                Check(rejected && c.Snapshot().Bindings.Count==0 && store.Value.Bindings.Count==0 && !c.IsRunning,"Failed binding published or executed");
+                rejected=false;try{c.PrepareRecording();}catch(InvalidOperationException){rejected=true;}Check(rejected && !c.RecordingSession,"Failed recorder pretended active");
+                rejected=false;try{c.Preview(Library(true),"main");}catch(InvalidOperationException){rejected=true;}Check(rejected && !c.IsRunning && !c.MouseHookInstalled,"Failed preview executed unprotected");
+            }
+        }
+        private sealed class Store : IMacroStore
+        {
+            internal MacroLibrary Value=new MacroLibrary(); internal bool Fail;
+            public string FilePath { get { return Path.Combine(directory,"hook-isolated.xml"); } }
+            public MacroLibrary Load() { return Value.Clone(); }
+            public void Save(MacroLibrary v) { if(Fail)throw new IOException("test save failure"); Value=v.Clone(); }
+        }
+        private sealed class Output : IMacroOutput
+        {
+            internal MacroController Controller; internal int Downs,Ups; internal bool MissingHook;
+            public void Key(int k,bool d) { }
+            public void MouseButton(MouseAction b,bool d) { if(!Controller.MouseHookInstalled)MissingHook=true; if(d)Interlocked.Increment(ref Downs);else Interlocked.Increment(ref Ups); }
+            public void Wheel(int n) { if(!Controller.MouseHookInstalled)MissingHook=true; }
+            public void Text(string v,CancellationToken t) { }
+            public void Launch(string v,string a,bool c) { }
+        }
+        private static MacroLibrary Library(bool mouse)
+        {
+            var l=new MacroLibrary(); var m=new MacroDefinition {Id="main"};
+            m.Steps.Add(new MacroStep {Kind=mouse?ActionKind.Mouse:ActionKind.Delay,Mouse=MouseAction.Left,Number=1});
+            m.Steps.Add(new MacroStep {Kind=ActionKind.Delay,Number=1000}); l.Macros.Add(m); return l;
+        }
+        private static void ControllerPolicy()
+        {
+            var store=new Store(); var output=new Output();
+            using(var c=new MacroController(store,output,true)) {
+                output.Controller=c; Check(!c.MouseHookInstalled && c.KeyboardHookInstalled,"Empty controller has mouse hook");
+                var l=Library(false); c.Save(l);
+                foreach(var trigger in new[]{TriggerKind.Right,TriggerKind.Middle,TriggerKind.X1,TriggerKind.X2,TriggerKind.WheelUp,TriggerKind.WheelDown}) {
+                    var b=new MacroBinding {MacroId="main",Trigger=trigger}; c.ApplyBinding(b,false); Check(c.MouseHookInstalled,"Binding not prearmed: "+trigger);
+                    c.PauseNewBindings(true); Until(()=>!c.MouseHookInstalled); c.PauseNewBindings(false); Check(c.MouseHookInstalled,"Resume not prearmed");
+                    Check(c.BeginUpdateHandoff(),"Idle handoff failed"); Until(()=>!c.MouseHookInstalled); c.CancelUpdateHandoff();Check(c.MouseHookInstalled,"Handoff cancel not armed");
+                    c.SetBindingEnabled(b.Id,false);Until(()=>!c.MouseHookInstalled); c.SetBindingEnabled(b.Id,true);Check(c.MouseHookInstalled,"Enable not armed");
+                    store.Fail=true; try{c.RemoveBinding(b.Id);}catch(IOException){} Until(()=>!c.MouseHookInstalled);
+                    Check(c.SafetySavePending && c.Snapshot().Bindings.Count==0,"Failed safety save restored binding");store.Fail=false;c.RetrySafetySave();
+                }
+                c.PrepareRecording();Check(c.MouseHookInstalled && c.Recorder==null,"Countdown is not armed");
+                c.StartRecording(RecordingDelay.None,0,500);Check(c.MouseHookInstalled,"Recorder lost hook");
+                c.EndRecording();Until(()=>!c.MouseHookInstalled);
+            }
+        }
+        private static void MouseOutputPolicy()
+        {
+            var store=new Store {Value=Library(true)};
+            var child=store.Value.Macros[0]; child.Id="child";
+            var root=new MacroDefinition {Id="main"};root.Steps.Add(new MacroStep {Kind=ActionKind.CallMacro,Value="child"});store.Value.Macros.Add(root);
+            store.Value.Bindings.Add(new MacroBinding {MacroId="main",Trigger=TriggerKind.Keyboard,KeyCode=117});
+            var output=new Output();
+            using(var c=new MacroController(store,output,true)) {
+                output.Controller=c;Check(c.MouseHookInstalled,"Nested keyboard mouse output not prearmed");
+                var router=Field<BindingRouter>(c,"router");
+                router.Handle(new InputStroke {Trigger=TriggerKind.Keyboard,Key=117,Down=true});Until(()=>output.Downs>0);
+                c.PauseNewBindings(true);Check(c.IsRunning && c.MouseHookInstalled,"Pause stopped existing run or removed protection");c.Stop();Until(()=>!c.IsRunning);Until(()=>!c.MouseHookInstalled);
+                Check(!output.MissingHook && output.Downs==output.Ups,"Nested mouse down/up unprotected");
+                int before=output.Downs;
+                Check(c.Preview(store.Value,"main"),"Preview rejected");Check(c.MouseHookInstalled,"Preview not prearmed");
+                Until(()=>output.Downs>before); c.Stop();Until(()=>!c.IsRunning);Until(()=>!c.MouseHookInstalled);
+                Check(!output.MissingHook && output.Downs==output.Ups,"Preview lost first down or final up");
+            }
         }
     }
 }
